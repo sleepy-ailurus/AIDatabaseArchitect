@@ -1,0 +1,20 @@
+# Vue / Frontend (前端依赖)
+frontend/node_modules/
+frontend/dist/
+frontend/.vscode/
+frontend/.idea/
+
+# Python / Backend (后端依赖 - 适配 uv 管理)
+backend/__pycache__/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+backend/env/
+backend/.python-version
+backend/.vscode/
+backend/.idea/
+
+# IDE / OS 系统文件（全局忽略）
+.vscode/
+.idea/
+.DS_Store
