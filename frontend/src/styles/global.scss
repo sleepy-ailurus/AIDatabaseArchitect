@@ -130,3 +130,57 @@ a {
     --el-tag-text-color: #DC2626;
   }
 }
+
+// 深色模式基础覆盖（与 Element Plus dark/css-vars.css 配合）
+html.dark {
+  color-scheme: dark;
+
+  body,
+  #app {
+    background-color: #252526 !important;
+    color: #e2e8f0 !important;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+
+    &:hover {
+      background: #64748b;
+    }
+  }
+
+  .page-container,
+  .card {
+    background-color: #252526 !important;
+    color: #e2e8f0 !important;
+    border-color: #3c3c3c !important;
+  }
+
+  .page-title {
+    color: #f8fafc !important;
+  }
+
+  .page-subtitle {
+    color: #94a3b8 !important;
+  }
+
+  .text-secondary {
+    color: #94a3b8 !important;
+  }
+
+  // 覆盖页面内常见的硬编码浅色文字，避免在深色卡片上对比度不足
+  .page-container [style*="color: #64748B"],
+  .page-container [style*="color: rgb(100, 116, 139)"] {
+    color: #94a3b8 !important;
+  }
+
+  .page-container [style*="color: #94A3B8"],
+  .page-container [style*="color: rgb(148, 163, 184)"] {
+    color: #94a3b8 !important;
+  }
+
+  .page-container [style*="color: #CBD5E1"],
+  .page-container [style*="color: rgb(203, 213, 225)"] {
+    color: #94a3b8 !important;
+  }
+}

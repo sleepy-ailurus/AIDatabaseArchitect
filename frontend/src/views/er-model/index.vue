@@ -1,12 +1,12 @@
 <template>
   <div class="er-editor-page">
-    <div class="editor-header">
+    <div class="editor-header" :class="{ collapsed: topHeaderCollapsed }">
       <div class="header-left">
         <el-breadcrumb separator="/" class="breadcrumb-sm">
           <el-breadcrumb-item style="color: #94A3B8;">项目</el-breadcrumb-item>
-          <el-breadcrumb-item style="color: #94A3B8;">{{ projectName }}</el-breadcrumb-item>
+          <el-breadcrumb-item style="color: #94A3B8; cursor: pointer;" @click="goToProject">{{ projectName }}</el-breadcrumb-item>
           <el-breadcrumb-item>
-            <span style="color: #1E293B; font-weight: 600;">ER 模型编辑器</span>
+            <span class="current-crumb">ER 模型编辑器</span>
           </el-breadcrumb-item>
         </el-breadcrumb>
 
@@ -24,7 +24,14 @@
 
       <div class="header-right">
         <div class="search-box">
-          <el-input v-model="searchTable" placeholder="搜索表名..." size="small" clearable style="width: 160px;">
+          <el-input
+            v-model="searchTable"
+            placeholder="搜索表名..."
+            size="small"
+            clearable
+            style="width: 160px;"
+            @keyup.enter="onSearchEnter"
+          >
             <template #prefix><el-icon :size="14"><Search /></el-icon></template>
           </el-input>
         </div>
@@ -32,13 +39,13 @@
         <el-divider direction="vertical" />
 
         <el-button-group>
-          <el-tooltip content="自动布局" placement="bottom">
+          <el-tooltip content="自动布局" placement="bottom" popper-class="er-tip">
             <el-button size="small" @click="autoLayout"><el-icon><SetUp /></el-icon></el-button>
           </el-tooltip>
-          <el-tooltip content="适配视图" placement="bottom">
-            <el-button size="small" @click="fitView"><el-icon><Aim /></el-icon></el-button>
+          <el-tooltip content="适配视图" placement="bottom" popper-class="er-tip">
+            <el-button size="small" @click="handleFitView"><el-icon><Aim /></el-icon></el-button>
           </el-tooltip>
-          <el-tooltip content="添加虚拟实体" placement="bottom">
+          <el-tooltip content="添加虚拟实体" placement="bottom" popper-class="er-tip">
             <el-button size="small" @click="addVirtualNode"><el-icon><Plus /></el-icon></el-button>
           </el-tooltip>
         </el-button-group>
@@ -60,8 +67,15 @@
       </div>
     </div>
 
+    <button class="header-collapse-btn" :class="{ collapsed: topHeaderCollapsed }" @click="topHeaderCollapsed = !topHeaderCollapsed">
+      <el-icon><ArrowUp v-if="!topHeaderCollapsed" /><ArrowDown v-else /></el-icon>
+    </button>
+
     <div class="editor-body">
-      <aside class="tables-sidebar">
+      <button class="sidebar-collapse-btn" :class="{ collapsed: leftSidebarCollapsed }" @click="leftSidebarCollapsed = !leftSidebarCollapsed">
+        <el-icon><ArrowLeft v-if="!leftSidebarCollapsed" /><ArrowRight v-else /></el-icon>
+      </button>
+      <aside class="tables-sidebar" :class="{ collapsed: leftSidebarCollapsed }">
         <div class="sidebar-tabs">
           <div class="tab" :class="{ active: sidebarTab === 'tables' }" @click="sidebarTab = 'tables'">
             <el-icon><Grid /></el-icon> 表列表
@@ -69,7 +83,7 @@
         </div>
 
         <div class="sidebar-search">
-          <el-input v-model="searchTable" placeholder="筛选表..." size="small" clearable>
+          <el-input v-model="sidebarSearchTable" placeholder="筛选表..." size="small" clearable>
             <template #prefix><el-icon :size="14"><Search /></el-icon></template>
           </el-input>
         </div>
@@ -96,6 +110,7 @@
         <VueFlow
           v-model:nodes="nodes"
           v-model:edges="edges"
+          v-model:viewport="viewport"
           :node-types="nodeTypes"
           :edge-types="edgeTypes"
           :default-viewport="{ zoom: 1 }"
@@ -109,7 +124,35 @@
           @pane-click="onPaneClick"
         >
           <Background :gap="20" :size="1" pattern="dots" />
-          <Controls />
+          <Controls :show-zoom="false" :show-fit-view="false" :show-interactive="false">
+            <ControlButton @click="zoomIn">
+              <el-tooltip content="放大" placement="right" popper-class="er-tip">
+                <el-icon><ZoomIn /></el-icon>
+              </el-tooltip>
+            </ControlButton>
+            <ControlButton @click="zoomOut">
+              <el-tooltip content="缩小" placement="right" popper-class="er-tip">
+                <el-icon><ZoomOut /></el-icon>
+              </el-tooltip>
+            </ControlButton>
+            <ControlButton :class="{ 'is-active': mode === 'pointer' }" @click="setMode('pointer')">
+              <el-tooltip content="指针模式" placement="right" popper-class="er-tip">
+                <svg class="mode-icon pointer-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M5.5 2.5L6 18l3-3 3 6 2-1-3-6 4 .5z" />
+                </svg>
+              </el-tooltip>
+            </ControlButton>
+            <ControlButton :class="{ 'is-active': mode === 'hand' }" @click="setMode('hand')">
+              <el-tooltip content="手模式" placement="right" popper-class="er-tip">
+                <svg class="mode-icon hand-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 11V6a2 2 0 00-2-2 2 2 0 00-2 2" />
+                  <path d="M14 10V4a2 2 0 00-2-2 2 2 0 00-2 2" />
+                  <path d="M10 10.5V6a2 2 0 00-2-2 2 2 0 00-2 2v8" />
+                  <path d="M18 8a2 2 0 012 2v4a6 6 0 01-6 6h-2a6 6 0 01-6-6v-1" />
+                </svg>
+              </el-tooltip>
+            </ControlButton>
+          </Controls>
           <MiniMap pannable zoomable />
         </VueFlow>
 
@@ -139,6 +182,11 @@
 
         <el-tabs v-model="detailTab" class="detail-tabs">
           <el-tab-pane label="字段" name="columns">
+            <div style="padding: 12px 16px 0;">
+              <el-button type="primary" size="small" :icon="Plus" @click="startAddColumn">
+                添加字段
+              </el-button>
+            </div>
             <div class="column-list">
               <div v-for="(c, idx) in selectedNode.data.columns" :key="idx" class="col-detail">
                 <div class="col-d-head">
@@ -277,6 +325,52 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="showAddColumn" title="添加字段" width="480px">
+      <el-form :model="addColForm" label-width="90px">
+        <el-form-item label="字段名">
+          <el-input v-model="addColForm.name" placeholder="例如：created_at" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="addColForm.type" placeholder="选择或输入类型" filterable allow-create style="width: 100%;">
+            <el-option label="INT" value="INT" />
+            <el-option label="INTEGER" value="INTEGER" />
+            <el-option label="BIGINT" value="BIGINT" />
+            <el-option label="VARCHAR" value="VARCHAR" />
+            <el-option label="CHAR" value="CHAR" />
+            <el-option label="TEXT" value="TEXT" />
+            <el-option label="DATETIME" value="DATETIME" />
+            <el-option label="DATE" value="DATE" />
+            <el-option label="TIMESTAMP" value="TIMESTAMP" />
+            <el-option label="DECIMAL" value="DECIMAL" />
+            <el-option label="FLOAT" value="FLOAT" />
+            <el-option label="DOUBLE" value="DOUBLE" />
+            <el-option label="BOOLEAN" value="BOOLEAN" />
+            <el-option label="TINYINT" value="TINYINT" />
+            <el-option label="JSON" value="JSON" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="主键">
+          <el-switch v-model="addColForm.isPK" />
+        </el-form-item>
+        <el-form-item label="唯一">
+          <el-switch v-model="addColForm.isUnique" />
+        </el-form-item>
+        <el-form-item label="可空">
+          <el-switch v-model="addColForm.nullable" />
+        </el-form-item>
+        <el-form-item label="默认值">
+          <el-input v-model="addColForm.default" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="注释">
+          <el-input v-model="addColForm.comment" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showAddColumn = false">取消</el-button>
+        <el-button type="primary" @click="saveNewColumn">保存</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="showVersionDialog" title="保存版本" width="440px">
       <el-form :model="versionForm" label-width="80px">
         <el-form-item label="版本备注">
@@ -337,12 +431,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, markRaw, provide } from 'vue'
+import { ref, reactive, computed, onMounted, markRaw, provide, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
+import dagre from 'dagre'
 import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
+import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -371,6 +466,7 @@ const pendingCardinality = ref('1:N')
 
 const projectName = ref('')
 const searchTable = ref('')
+const sidebarSearchTable = ref('')
 const sidebarTab = ref('tables')
 const selectedNodeId = ref(null)
 const selectedEdgeId = ref(null)
@@ -384,10 +480,42 @@ const editColIndex = ref(null)
 const versionForm = reactive({ note: '' })
 const virtualForm = reactive({ name: '', comment: '' })
 
+const showAddColumn = ref(false)
+const addColTargetNodeId = ref(null)
+const addColForm = reactive({
+  name: '',
+  type: '',
+  isPK: false,
+  isUnique: false,
+  nullable: true,
+  default: '',
+  comment: ''
+})
+
 const nodes = ref(erModelStore.nodes)
 const edges = ref(erModelStore.edges)
+const viewport = ref(erModelStore.viewport)
 
-const { fitView } = useVueFlow()
+const searchMatches = ref([])
+const searchIdx = ref(0)
+const leftSidebarCollapsed = ref(false)
+const topHeaderCollapsed = ref(false)
+
+const { fitView, getNodes, nodesDraggable, panOnDrag, zoomIn, zoomOut } = useVueFlow()
+
+const mode = ref('hand')
+const setMode = (m) => {
+  mode.value = m
+  if (m === 'hand') {
+    // 手模式：画布和表都可以移动
+    nodesDraggable.value = true
+    panOnDrag.value = true
+  } else {
+    // 指针模式：只能移动表，画布不随拖拽偏移
+    nodesDraggable.value = true
+    panOnDrag.value = false
+  }
+}
 
 const selectedNode = computed(() => {
   if (!selectedNodeId.value) return null
@@ -400,8 +528,46 @@ const selectedEdge = computed(() => {
 })
 
 const filteredNodes = computed(() => {
-  if (!searchTable.value) return nodes.value
-  return nodes.value.filter(n => (n.data.name || '').toLowerCase().includes(searchTable.value.toLowerCase()))
+  if (!sidebarSearchTable.value) return nodes.value
+  return nodes.value.filter(n => (n.data.name || '').toLowerCase().includes(sidebarSearchTable.value.toLowerCase()))
+})
+
+const onSearchEnter = () => {
+  const q = searchTable.value.trim()
+  if (!q) return
+  const matches = nodes.value.filter(n => (n.data.name || '').toLowerCase().includes(q.toLowerCase()))
+  if (matches.length === 0) {
+    ElMessage.warning('未找到匹配的表')
+    return
+  }
+  searchMatches.value = matches
+  if (searchIdx.value >= matches.length) searchIdx.value = 0
+  focusSearchNode(searchIdx.value)
+  searchIdx.value = (searchIdx.value + 1) % matches.length
+}
+
+const focusSearchNode = (idx) => {
+  const match = searchMatches.value[idx]
+  if (!match) return
+  nodes.value.forEach(n => { n.selected = false })
+  const node = nodes.value.find(n => String(n.id) === String(match.id))
+  if (node) node.selected = true
+  selectedNodeId.value = match.id
+  selectedEdgeId.value = null
+  fitView({
+    nodes: [{ id: match.id }],
+    duration: 400,
+    padding: 0.35,
+    maxZoom: 1.2
+  })
+}
+
+watch(searchTable, (val) => {
+  if (!val) {
+    searchMatches.value = []
+    searchIdx.value = 0
+    nodes.value.forEach(n => { n.selected = false })
+  }
 })
 
 const nodeRelations = computed(() => {
@@ -494,8 +660,12 @@ const onConnect = async (connection) => {
       cardinality: '1:N',
       sourceType: 'manual',
       confidence: 1,
-      fromColumn: connection.sourceHandle?.replace('s-', ''),
-      toColumn: connection.targetHandle?.replace('t-', ''),
+      fromColumn: connection.sourceHandle?.startsWith('s-')
+        ? connection.sourceHandle.replace('s-', '')
+        : null,
+      toColumn: connection.targetHandle?.startsWith('t-')
+        ? connection.targetHandle.replace('t-', '')
+        : null,
       reason: []
     }
   }
@@ -538,8 +708,9 @@ const confirmTableConnection = async () => {
     }
   }
   edges.value.push(newEdge)
+  erModelStore.addEdge(newEdge)
   try {
-    await createRelationship(projectId, {
+    const data = await createRelationship(projectId, {
       source_table: connection.source,
       target_table: connection.target,
       source_column: null,
@@ -547,6 +718,7 @@ const confirmTableConnection = async () => {
       cardinality,
       source_type: 'manual'
     })
+    if (data?.id) newEdge.id = String(data.id)
     ElMessage.success(`关系已创建 (${cardinality})`)
   } catch {
     // keep local edge even if API fails
@@ -575,6 +747,7 @@ const copyNode = (nodeId) => {
   }
   newNode.data.name = `${node.data.name}_copy`
   nodes.value.push(newNode)
+  erModelStore.addNode(newNode)
   ElMessage.success('表已复制')
 }
 
@@ -584,6 +757,7 @@ const deleteNode = (nodeId) => {
 
   edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
   nodes.value = nodes.value.filter(n => n.id !== nodeId)
+  erModelStore.removeNode(nodeId)
 
   if (selectedNodeId.value === nodeId) {
     selectedNodeId.value = null
@@ -591,11 +765,6 @@ const deleteNode = (nodeId) => {
 
   ElMessage.success('表已删除')
 }
-
-provide('nodeActions', {
-  copyNode,
-  deleteNode
-})
 
 const deleteEdge = async (id) => {
   try {
@@ -605,6 +774,7 @@ const deleteEdge = async (id) => {
     // ignore
   }
   edges.value = edges.value.filter(e => e.id !== id)
+  erModelStore.removeEdge(id)
   selectedEdgeId.value = null
 }
 
@@ -616,8 +786,70 @@ const editColumn = (idx) => {
   showEditColumn.value = true
 }
 
+const resetAddColForm = () => {
+  addColForm.name = ''
+  addColForm.type = ''
+  addColForm.isPK = false
+  addColForm.isUnique = false
+  addColForm.nullable = true
+  addColForm.default = ''
+  addColForm.comment = ''
+}
+
+const startAddColumn = () => {
+  if (!selectedNode.value) return
+  addColTargetNodeId.value = selectedNode.value.id
+  resetAddColForm()
+  showAddColumn.value = true
+}
+
+const openAddColumn = (nodeId) => {
+  const node = nodes.value.find(n => String(n.id) === String(nodeId))
+  if (!node) return
+  selectedNodeId.value = node.id
+  selectedEdgeId.value = null
+  addColTargetNodeId.value = node.id
+  resetAddColForm()
+  showAddColumn.value = true
+}
+
+provide('nodeActions', {
+  copyNode,
+  deleteNode,
+  openAddColumn
+})
+
+const saveNewColumn = () => {
+  if (!addColForm.name.trim()) {
+    ElMessage.warning('请输入字段名')
+    return
+  }
+  if (!addColForm.type.trim()) {
+    ElMessage.warning('请输入字段类型')
+    return
+  }
+  const target = nodes.value.find(n => String(n.id) === String(addColTargetNodeId.value))
+  if (!target) return
+  if (!Array.isArray(target.data.columns)) {
+    target.data.columns = []
+  }
+  target.data.columns.push({
+    name: addColForm.name.trim(),
+    type: addColForm.type.trim(),
+    isPK: addColForm.isPK,
+    isFK: false,
+    isUnique: addColForm.isUnique,
+    nullable: addColForm.nullable,
+    default: addColForm.default,
+    comment: addColForm.comment,
+    aiSuggested: false
+  })
+  showAddColumn.value = false
+  ElMessage.success('字段已添加（请点击保存按钮持久化）')
+}
+
 const saveColumnEdit = () => {
-  if (!selectedNode.value || editColForm.value) {
+  if (selectedNode.value && editColForm.value) {
     const idx = editColIndex.value
     selectedNode.value.data.columns[idx] = { ...editColForm.value }
   }
@@ -625,20 +857,85 @@ const saveColumnEdit = () => {
   ElMessage.success('字段已更新（请点击保存按钮持久化）')
 }
 
+const handleFitView = () => {
+  nextTick(() => {
+    setTimeout(() => {
+      fitView({ padding: 0.15, includeHiddenNodes: false, duration: 300 })
+    }, 50)
+  })
+}
+
 const autoLayout = () => {
-  const cols = 4
-  const colWidth = 300
-  const rowHeight = 360
-  nodes.value.forEach((node, idx) => {
-    const col = idx % cols
-    const row = Math.floor(idx / cols)
-    node.position = {
-      x: 40 + col * colWidth,
-      y: 40 + row * rowHeight
+  const g = new dagre.graphlib.Graph()
+  g.setGraph({
+    rankdir: 'LR',
+    align: 'UL',
+    nodesep: 120,
+    ranksep: 220,
+    edgesep: 50,
+    marginx: 60,
+    marginy: 60
+  })
+  g.setDefaultEdgeLabel(() => ({}))
+
+  const vueNodes = getNodes.value
+  vueNodes.forEach(node => {
+    const w = node.dimensions?.width || node.width || 240
+    const h = node.dimensions?.height || node.height || 200
+    g.setNode(String(node.id), { width: w, height: h })
+  })
+
+  edges.value.forEach(edge => {
+    // Target = parent (referenced), Source = child (foreign key holder)
+    // Edge direction target -> source makes parent sit to the left of child in LR layout.
+    g.setEdge(String(edge.target), String(edge.source))
+  })
+
+  dagre.layout(g)
+
+  vueNodes.forEach(node => {
+    const dagreNode = g.node(String(node.id))
+    if (dagreNode) {
+      node.position = {
+        x: dagreNode.x - dagreNode.width / 2,
+        y: dagreNode.y - dagreNode.height / 2
+      }
     }
   })
+
+  edges.value = edges.value.map(edge => {
+    const sourceNode = vueNodes.find(n => String(n.id) === String(edge.source))
+    const targetNode = vueNodes.find(n => String(n.id) === String(edge.target))
+    if (!sourceNode || !targetNode) return edge
+
+    const sx = sourceNode.position.x + (sourceNode.dimensions?.width || sourceNode.width || 240) / 2
+    const sy = sourceNode.position.y + (sourceNode.dimensions?.height || sourceNode.height || 200) / 2
+    const tx = targetNode.position.x + (targetNode.dimensions?.width || targetNode.width || 240) / 2
+    const ty = targetNode.position.y + (targetNode.dimensions?.height || targetNode.height || 200) / 2
+
+    const dx = tx - sx
+    const dy = ty - sy
+
+    let sourceHandle = 'right-source'
+    let targetHandle = 'left-target'
+
+    if (Math.abs(dy) > Math.abs(dx)) {
+      sourceHandle = dy > 0 ? 'bottom-source' : 'top-source'
+      targetHandle = dy > 0 ? 'top-target' : 'bottom-target'
+    } else {
+      sourceHandle = dx > 0 ? 'right-source' : 'left-source'
+      targetHandle = dx > 0 ? 'left-target' : 'right-target'
+    }
+
+    return {
+      ...edge,
+      sourceHandle,
+      targetHandle
+    }
+  })
+
   ElMessage.success('已自动布局')
-  setTimeout(() => fitView(), 100)
+  handleFitView()
 }
 
 const addVirtualNode = () => {
@@ -673,6 +970,8 @@ const confirmAddVirtual = () => {
 }
 
 const handleSave = async () => {
+  erModelStore.nodes = nodes.value
+  erModelStore.edges = edges.value
   try {
     await erModelStore.saveModel(projectId)
     ElMessage.success('ER 模型已保存')
@@ -688,6 +987,8 @@ const handleSaveVersion = () => {
 
 const confirmSaveVersion = async () => {
   savingVersion.value = true
+  erModelStore.nodes = nodes.value
+  erModelStore.edges = edges.value
   try {
     await erModelStore.saveVersion(projectId, versionForm.note)
     ElMessage.success('版本已保存')
@@ -701,37 +1002,142 @@ const confirmSaveVersion = async () => {
 
 const goToSuggestions = () => router.push(`/projects/${projectId}/ai-suggestions`)
 const goToExport = () => router.push(`/projects/${projectId}/export`)
+const goToProject = () => router.push('/projects')
 
 const buildFromSchema = (tables, relationships) => {
-  nodes.value = erModelStore.buildNodes(tables)
+  // Build nodes into the store first so buildEdges can resolve table names -> node ids.
+  const builtNodes = erModelStore.buildNodes(tables, relationships)
+  erModelStore.nodes = builtNodes
+  nodes.value = builtNodes
   edges.value = erModelStore.buildEdges(relationships)
 }
 
+const normalizeList = (d) => Array.isArray(d) ? d : (d?.items || d?.relationships || d?.tables || [])
+
+const normalizeEdge = (edge) => {
+  const data = edge.data || {}
+  return {
+    ...edge,
+    type: 'relationEdge',
+    sourceHandle: edge.sourceHandle || 'right-source',
+    targetHandle: edge.targetHandle || 'left-target',
+    data: {
+      cardinality: data.cardinality || '1:N',
+      sourceType: data.sourceType || 'database',
+      confidence: data.confidence ?? 1,
+      fromColumn: data.fromColumn || null,
+      toColumn: data.toColumn || null,
+      constraintName: data.constraintName || null,
+      reason: data.reason || []
+    }
+  }
+}
+
 const loadModel = async () => {
+  // 1) 优先加载已保存的 ER 模型（含节点位置、视口）
+  let usedSaved = false
   try {
     const data = await erModelStore.loadModel(projectId)
-    if (data && (data.nodes?.length || data.tables?.length)) {
-      nodes.value = erModelStore.nodes
-      edges.value = erModelStore.edges
-      return
+    if (data?.model_data?.nodes?.length) {
+      nodes.value = erModelStore.nodes.map(n => ({ ...n }))
+      edges.value = (erModelStore.edges || []).map(normalizeEdge)
+      if (data.model_data.viewport) {
+        viewport.value = data.model_data.viewport
+      }
+      usedSaved = true
     }
   } catch {
-    // fall through to schema
+    // 继续走 schema 兜底
   }
 
+  // 2) 没有已保存模型时，从 schema 表 + 关系重建节点与边
+  if (!usedSaved) {
+    try {
+      const [tablesData, relsData] = await Promise.all([
+        getTables(projectId),
+        getRelationships(projectId)
+      ])
+      const tables = normalizeList(tablesData)
+      const rels = normalizeList(relsData).filter(r => r.status !== 'rejected')
+      buildFromSchema(tables, rels)
+    } catch {
+      // 还没有 schema 数据
+    }
+  }
+
+  // 3) 始终用最新的关系数据补齐边：
+  //    - 显式外键(database_constraint)、已确认、手动、AI 建议都应显示；
+  //    - 被用户“拒绝/删除”的关系不在库中，不会重新出现；
+  //    - 已存在的边（含用户在编辑器中的修改）优先保留，避免覆盖；
+  //    - 对已有边合并最新关系元数据（如 constraintName），避免已保存模型里缺少字段。
+  try {
+    const relsData = await getRelationships(projectId)
+    const rels = normalizeList(relsData).filter(r => r.status !== 'rejected')
+    const relEdges = erModelStore.buildEdges(rels).map(normalizeEdge)
+    const edgeMap = new Map()
+    const norm = (v) => (v == null ? '' : String(v))
+    const edgeKey = (e) => {
+      const d = e.data || {}
+      return `${e.source}|${e.target}|${norm(d.fromColumn)}|${norm(d.toColumn)}`
+    }
+    const pairKey = (e) => `${e.source}|${e.target}`
+    const edgeByKey = new Map()
+    const edgeByPair = new Map()
+    for (const e of edges.value.map(normalizeEdge)) {
+      edgeMap.set(e.id, e)
+      edgeByKey.set(edgeKey(e), e)
+      const pk = pairKey(e)
+      if (!edgeByPair.has(pk)) edgeByPair.set(pk, [])
+      edgeByPair.get(pk).push(e)
+    }
+    for (const e of relEdges) {
+      let existing = edgeMap.get(e.id) || edgeByKey.get(edgeKey(e))
+      // 宽松匹配：同表对且缺少 constraintName 的边
+      if (!existing) {
+        const candidates = edgeByPair.get(pairKey(e)) || []
+        existing = candidates.find(c => !c.data?.constraintName)
+      }
+      if (existing) {
+        edgeMap.set(existing.id, normalizeEdge({
+          ...existing,
+          data: {
+            ...(existing.data || {}),
+            constraintName: e.data?.constraintName || existing.data?.constraintName || null,
+            sourceType: e.data?.sourceType || existing.data?.sourceType || 'database',
+            cardinality: e.data?.cardinality || existing.data?.cardinality || '1:N',
+            fromColumn: e.data?.fromColumn || existing.data?.fromColumn || null,
+            toColumn: e.data?.toColumn || existing.data?.toColumn || null
+          }
+        }))
+      } else {
+        edgeMap.set(e.id, e)
+        edgeByKey.set(edgeKey(e), e)
+        const pk = pairKey(e)
+        if (!edgeByPair.has(pk)) edgeByPair.set(pk, [])
+        edgeByPair.get(pk).push(e)
+      }
+    }
+    edges.value = [...edgeMap.values()]
+  } catch (err) {
+    console.error('补齐关系边失败', err)
+  }
+
+  // 4) 用最新 schema + relationships 修复已保存节点的 PK/FK/Unique 标志
   try {
     const [tablesData, relsData] = await Promise.all([
       getTables(projectId),
       getRelationships(projectId)
     ])
-    const tables = Array.isArray(tablesData) ? tablesData : (tablesData?.items || tablesData?.tables || [])
-    const rels = Array.isArray(relsData) ? relsData : (relsData?.items || relsData?.relationships || [])
-    buildFromSchema(tables, rels)
-    erModelStore.nodes = nodes.value
-    erModelStore.edges = edges.value
+    const tables = normalizeList(tablesData)
+    const rels = normalizeList(relsData).filter(r => r.status !== 'rejected')
+    const repaired = erModelStore.repairNodeKeyFlags(nodes.value, tables, rels)
+    nodes.value = repaired
   } catch {
-    // no schema data yet
+    // ignore
   }
+
+  erModelStore.nodes = nodes.value
+  erModelStore.edges = edges.value
 }
 
 const loadProject = async () => {
@@ -743,7 +1149,13 @@ const loadProject = async () => {
   }
 }
 
+// 左侧表列表面板折叠/展开后，画布宽度变化，等 0.25s transition 结束再 fitView
+watch(leftSidebarCollapsed, () => {
+  setTimeout(() => handleFitView(), 300)
+})
+
 onMounted(() => {
+  setMode(mode.value)
   loadProject()
   loadModel()
 })
@@ -757,6 +1169,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   background: $bg-color;
+  position: relative;
 }
 
 .editor-header {
@@ -768,7 +1181,45 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  overflow: hidden;
+  transition: height 0.25s ease, padding 0.25s ease, opacity 0.25s ease, border-width 0.25s ease;
+
+  &.collapsed {
+    height: 0;
+    padding: 0 20px;
+    opacity: 0;
+    border-bottom-width: 0;
+  }
 }
+
+  .header-collapse-btn {
+    position: absolute;
+    top: 18px;
+    right: 8px;
+    z-index: 30;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid $border-light;
+    background: $bg-white;
+    color: $text-secondary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: $shadow-sm;
+    transition: top 0.25s ease, background 0.15s, color 0.15s;
+
+    &.collapsed {
+      top: 8px;
+      right: 8px;
+    }
+
+    &:hover {
+      background: $bg-light;
+      color: $primary-color;
+    }
+  }
 
 .header-left {
   display: flex;
@@ -778,6 +1229,19 @@ onMounted(() => {
 
 .breadcrumb-sm {
   :deep(.el-breadcrumb__inner) { font-size: 13px; }
+
+  .current-crumb {
+    color: #1E293B;
+    font-weight: 600;
+  }
+
+  .el-breadcrumb__item[style*="cursor: pointer"] :deep(.el-breadcrumb__inner) {
+    cursor: pointer;
+    transition: color .15s;
+  }
+  .el-breadcrumb__item[style*="cursor: pointer"] :deep(.el-breadcrumb__inner):hover {
+    color: #2563eb !important;
+  }
 }
 
 .header-stats {
@@ -801,12 +1265,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-right: 32px;
 }
 
 .editor-body {
   flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
 }
 
 .tables-sidebar {
@@ -816,6 +1282,43 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  transition: width 0.25s ease;
+  position: relative;
+
+  &.collapsed {
+    width: 0;
+    overflow: hidden;
+    border-right: none;
+  }
+}
+
+.sidebar-collapse-btn {
+  position: absolute;
+  left: 246px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid $border-light;
+  background: $bg-white;
+  color: $text-secondary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: $shadow-sm;
+  transition: left 0.25s ease;
+
+  &.collapsed {
+    left: 14px;
+  }
+
+  &:hover {
+    background: $bg-light;
+    color: $primary-color;
+  }
 }
 
 .sidebar-tabs {
@@ -1232,5 +1735,235 @@ onMounted(() => {
     color: $text-secondary;
     margin-top: 2px;
   }
+}
+
+html.dark {
+  .er-editor-page { background: #252526; }
+
+  .editor-header {
+    background: #252526 !important;
+    border-bottom-color: #3c3c3c !important;
+  }
+
+  .current-crumb { color: #f8fafc !important; }
+
+  .breadcrumb-sm :deep(.el-breadcrumb__inner) { color: #94a3b8 !important; }
+  .breadcrumb-sm :deep(.el-breadcrumb__inner.is-link:hover) { color: #60a5fa !important; }
+  .breadcrumb-sm .el-breadcrumb__item[style*="cursor: pointer"] :deep(.el-breadcrumb__inner):hover { color: #60a5fa !important; }
+
+  .stat-pill {
+    background: #1e1e1e !important;
+    color: #94a3b8 !important;
+  }
+
+  .search-box {
+    .el-input__wrapper {
+      background: #1e1e1e !important;
+      box-shadow: 0 0 0 1px #3c3c3c !important;
+    }
+    .el-input__inner { color: #f8fafc; }
+    .el-input__icon { color: #94a3b8; }
+  }
+
+  :deep(.el-divider--vertical) { border-left-color: #3c3c3c !important; }
+
+  .tables-sidebar {
+    background: #252526 !important;
+    border-right-color: #3c3c3c !important;
+
+    &.collapsed { border-right: none; }
+  }
+
+  .sidebar-collapse-btn {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
+    color: #94a3b8 !important;
+
+    &:hover { background: #3c3c3c !important; color: #60a5fa !important; }
+  }
+
+  .header-collapse-btn {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
+    color: #94a3b8 !important;
+
+    &:hover { background: #3c3c3c !important; color: #60a5fa !important; }
+  }
+
+  .sidebar-tabs {
+    border-bottom-color: #3c3c3c !important;
+    .tab {
+      color: #94a3b8 !important;
+      &:hover { background: #3c3c3c !important; }
+      &.active { background: rgba(59, 130, 246, 0.15) !important; color: #60a5fa !important; }
+    }
+  }
+
+  .sidebar-search {
+    border-bottom-color: #3c3c3c !important;
+    .el-input__wrapper {
+      background: #1e1e1e !important;
+      box-shadow: 0 0 0 1px #3c3c3c !important;
+    }
+    .el-input__inner { color: #f8fafc; }
+  }
+
+  .table-item {
+    .table-name { color: #e2e8f0 !important; }
+    .table-sub { color: #94a3b8 !important; }
+    &:hover { background: #3c3c3c !important; }
+    &.active { background: rgba(59, 130, 246, 0.15) !important; }
+  }
+
+  .canvas-area {
+    background: #1e1e1e !important;
+  }
+
+  .vue-flow-canvas :deep(.vue-flow__container) {
+    background: #1e1e1e !important;
+  }
+
+  .legend-bar {
+    background: #252526 !important;
+    border: 1px solid #3c3c3c !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+
+    .legend-item { color: #94a3b8 !important; }
+  }
+
+  .detail-sidebar,
+  .edge-sidebar {
+    background: #252526 !important;
+    border-left-color: #3c3c3c !important;
+  }
+
+  .detail-header { border-bottom-color: #3c3c3c !important; }
+  .detail-title { color: #f8fafc !important; }
+  .table-comment {
+    background: #1e1e1e !important;
+    color: #94a3b8 !important;
+  }
+
+  .detail-tabs {
+    :deep(.el-tabs__item) { color: #94a3b8 !important; }
+    :deep(.el-tabs__item.is-active) { color: #60a5fa !important; }
+    :deep(.el-tabs__active-bar) { background-color: #60a5fa !important; }
+  }
+
+  .column-list {
+    .col-detail { background: #1e1e1e !important; }
+    .col-d-name { color: #f8fafc !important; }
+    .col-d-type { color: #60a5fa !important; }
+    .col-d-comment { color: #94a3b8 !important; border-top-color: #3c3c3c !important; }
+    .col-d-edit { border-top-color: #3c3c3c !important; }
+  }
+
+  .rel-list {
+    .rel-card { border-color: #3c3c3c !important; }
+    .rel-cols { color: #94a3b8 !important; }
+  }
+
+  .edge-detail-body {
+    code { background: #1e1e1e !important; color: #e2e8f0 !important; }
+  }
+
+  .cardinality-opt {
+    border-color: #3c3c3c !important;
+    &:hover { border-color: #60a5fa !important; background: rgba(59, 130, 246, 0.08) !important; }
+    .cardinality-label { color: #f8fafc !important; }
+    .cardinality-desc { color: #94a3b8 !important; }
+  }
+
+  :deep(.vue-flow__controls-button) {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
+    svg { color: #94a3b8 !important; }
+    &:hover { background: #3c3c3c !important; svg { color: #60a5fa !important; } }
+
+    &.is-active {
+      background: rgba(96, 165, 250, 0.22) !important;
+      border-color: #60a5fa !important;
+      box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.45), 0 0 8px rgba(96, 165, 250, 0.35) !important;
+      svg { color: #93c5fd !important; }
+    }
+  }
+
+  :deep(.vue-flow__controls-button) .mode-icon {
+    display: block;
+    margin: auto;
+  }
+
+  :deep(.vue-flow__minimap) {
+    background: #252526 !important;
+    border: 1px solid #3c3c3c !important;
+  }
+}
+</style>
+
+<style lang="scss">
+/* 全局 tooltip：去掉默认黑色背景 */
+.er-tip.el-popper {
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12) !important;
+}
+.er-tip.el-popper .el-popper__arrow::before {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+html.dark .er-tip.el-popper {
+  background: #252526 !important;
+  color: #e5e7eb !important;
+  border: 1px solid #3c3c3c !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4) !important;
+}
+html.dark .er-tip.el-popper .el-popper__arrow::before {
+  background: #252526 !important;
+  border: 1px solid #3c3c3c !important;
+}
+
+/* 浅色模式：当前模式按钮高亮（淡蓝） */
+.vue-flow__controls {
+  .vue-flow__controls-button.is-active {
+    background: rgba(96, 165, 250, 0.22) !important;
+    border-color: #60a5fa !important;
+    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.45), 0 0 8px rgba(96, 165, 250, 0.35) !important;
+    svg { color: #2563eb !important; }
+  }
+}
+
+html.dark .vue-flow__controls {
+  .vue-flow__controls-button {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
+
+    svg { color: #94a3b8 !important; }
+
+    &:hover {
+      background: #3c3c3c !important;
+      svg { color: #60a5fa !important; }
+    }
+
+    &.is-active {
+      background: rgba(96, 165, 250, 0.22) !important;
+      border-color: #60a5fa !important;
+      box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.45), 0 0 8px rgba(96, 165, 250, 0.35) !important;
+      svg { color: #2563eb !important; }
+    }
+  }
+}
+
+html.dark .vue-flow__minimap {
+  background: #252526 !important;
+  border: 1px solid #3c3c3c !important;
+
+  .vue-flow__minimap-mask {
+    fill: rgba(37, 37, 38, 0.7) !important;
+  }
+}
+
+html.dark .vue-flow__edge-path {
+  stroke: #94a3b8 !important;
 }
 </style>

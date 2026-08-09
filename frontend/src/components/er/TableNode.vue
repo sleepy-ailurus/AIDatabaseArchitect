@@ -1,6 +1,6 @@
 <template>
   <div class="table-node-wrap" :class="{ selected: selected }">
-    <!-- Top anchor points (for table-to-table connections) -->
+    <!-- Top anchor points -->
     <Handle
       type="target"
       :position="Position.Top"
@@ -36,6 +36,9 @@
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item command="addColumn">
+                <el-icon><Plus /></el-icon> 添加字段
+              </el-dropdown-item>
               <el-dropdown-item command="copy">
                 <el-icon><CopyDocument /></el-icon> 复制表
               </el-dropdown-item>
@@ -60,13 +63,6 @@
           'ai-suggested': col.aiSuggested
         }"
       >
-        <Handle
-          v-if="idx < maxDisplay"
-          type="source"
-          :position="Position.Left"
-          :id="`s-${col.name}`"
-          class="col-handle left"
-        />
         <span class="col-key">
           <span v-if="col.isPK" class="key-icon pk" title="主键">🔑</span>
           <span v-else-if="col.isFK" class="key-icon fk" title="外键">🔗</span>
@@ -75,13 +71,6 @@
         </span>
         <span class="col-name">{{ col.name }}</span>
         <span class="col-type" :class="getTypeClass(col.type)">{{ col.type }}</span>
-        <Handle
-          v-if="idx < maxDisplay"
-          type="target"
-          :position="Position.Right"
-          :id="`t-${col.name}`"
-          class="col-handle right"
-        />
       </div>
       <div v-if="data.columns && data.columns.length > maxDisplay" class="more-fields">
         + {{ data.columns.length - maxDisplay }} 个字段
@@ -93,16 +82,44 @@
 
     <!-- Bottom anchor points -->
     <Handle
-      type="source"
-      :position="Position.Bottom"
-      id="bottom-source"
-      class="table-anchor bottom-anchor-left"
-    />
-    <Handle
       type="target"
       :position="Position.Bottom"
       id="bottom-target"
+      class="table-anchor bottom-anchor-left"
+    />
+    <Handle
+      type="source"
+      :position="Position.Bottom"
+      id="bottom-source"
       class="table-anchor bottom-anchor-right"
+    />
+
+    <!-- Left anchor points -->
+    <Handle
+      type="target"
+      :position="Position.Left"
+      id="left-target"
+      class="table-anchor side-anchor left-target"
+    />
+    <Handle
+      type="source"
+      :position="Position.Left"
+      id="left-source"
+      class="table-anchor side-anchor left-source"
+    />
+
+    <!-- Right anchor points -->
+    <Handle
+      type="target"
+      :position="Position.Right"
+      id="right-target"
+      class="table-anchor side-anchor right-target"
+    />
+    <Handle
+      type="source"
+      :position="Position.Right"
+      id="right-source"
+      class="table-anchor side-anchor right-source"
     />
   </div>
 </template>
@@ -123,6 +140,7 @@ const emit = defineEmits(['rename'])
 const nodeActions = inject('nodeActions', null)
 
 const maxDisplay = 12
+
 const editing = ref(false)
 const localName = ref('')
 const nameInputRef = ref(null)
@@ -181,7 +199,9 @@ const cancelEdit = () => {
 
 const handleMenuCommand = async (cmd) => {
   const nodeId = props.id
-  if (cmd === 'copy') {
+  if (cmd === 'addColumn') {
+    nodeActions?.openAddColumn(nodeId)
+  } else if (cmd === 'copy') {
     nodeActions?.copyNode(nodeId)
   } else if (cmd === 'delete') {
     try {
@@ -246,13 +266,23 @@ const handleMenuCommand = async (cmd) => {
 }
 
 .more-btn {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.9) !important;
+  background: transparent !important;
+  border-color: transparent !important;
   width: 24px !important;
   height: 24px !important;
   padding: 0 !important;
 
-  &:hover {
-    background: rgba(255, 255, 255, 0.2);
+  &:hover,
+  &:focus,
+  &:active {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-color: transparent !important;
+  }
+
+  :deep(.el-icon) {
+    color: inherit !important;
   }
 }
 
@@ -299,7 +329,7 @@ const handleMenuCommand = async (cmd) => {
 }
 
 .node-body {
-  padding: 4px 0;
+  padding: 0 0 4px;
 }
 
 .column-row {
@@ -308,7 +338,6 @@ const handleMenuCommand = async (cmd) => {
   gap: 6px;
   padding: 5px 10px;
   font-size: 12px;
-  position: relative;
 
   &:hover { background: $bg-light; }
 
@@ -376,27 +405,6 @@ const handleMenuCommand = async (cmd) => {
   background: $bg-light;
 }
 
-.col-handle {
-  width: 8px;
-  height: 8px;
-  background: $primary-color;
-  border: 1px solid white;
-  border-radius: 50%;
-  opacity: 0;
-  transition: opacity 0.2s;
-
-  &.left {
-    left: -4px;
-  }
-  &.right {
-    right: -4px;
-  }
-}
-
-.column-row:hover .col-handle {
-  opacity: 0.6;
-}
-
 .table-anchor {
   width: 12px !important;
   height: 12px !important;
@@ -418,22 +426,92 @@ const handleMenuCommand = async (cmd) => {
 
   &.top-anchor-left {
     top: 0px;
-    left: 40px;
+    left: 50%;
   }
 
   &.top-anchor-right {
     top: 0px;
-    right: 40px;
+    left: 50%;
   }
 
   &.bottom-anchor-left {
-    bottom: 0px;
-    left: 40px;
+    bottom: -12px;
+    left: 50%;
   }
 
   &.bottom-anchor-right {
-    bottom: 0px;
-    right: 40px;
+    bottom: -12px;
+    left: 50%;
+  }
+
+  &.side-anchor {
+    &.left-target {
+      left: 0;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    &.left-source {
+      left: 0;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    &.right-target {
+      right: 0;
+      top: 50%;
+      transform: translate(50%, -50%);
+    }
+
+    &.right-source {
+      right: 0;
+      top: 50%;
+      transform: translate(50%, -50%);
+    }
+  }
+}
+
+html.dark {
+  .table-node-wrap {
+    background: #252526 !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25), 0 4px 6px -4px rgba(0, 0, 0, 0.2) !important;
+
+    &.selected {
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25), 0 10px 15px -3px rgba(0, 0, 0, 0.25) !important;
+    }
+  }
+
+  .column-row {
+    &:hover {
+      background: #3c3c3c !important;
+    }
+
+    &.pk { background: rgba(245, 158, 11, 0.12) !important; }
+    &.fk { background: rgba(59, 130, 246, 0.12) !important; }
+    &.uk { background: rgba(99, 102, 241, 0.12) !important; }
+  }
+
+  .col-name {
+    color: #e2e8f0 !important;
+  }
+
+  .col-type {
+    color: #94a3b8 !important;
+  }
+
+  .more-fields {
+    color: #64748b !important;
+    border-color: #3c3c3c !important;
+  }
+
+  .column-footer {
+    color: #94a3b8 !important;
+    border-color: #3c3c3c !important;
+    background: #2a2a2b !important;
+  }
+
+  .table-anchor {
+    border-color: #252526 !important;
   }
 }
 </style>

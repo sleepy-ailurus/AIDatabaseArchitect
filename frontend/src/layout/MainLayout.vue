@@ -21,8 +21,8 @@
           router
           class="sidebar-menu"
           background-color="transparent"
-          text-color="#64748B"
-          active-text-color="#3B82F6"
+          :text-color="menuTextColor"
+          :active-text-color="menuActiveTextColor"
         >
           <template v-for="route in menuRoutes" :key="route.path">
             <el-menu-item :index="resolvePath(route.path)">
@@ -34,22 +34,12 @@
       </el-scrollbar>
 
       <div class="sidebar-bottom">
-        <el-tooltip v-if="!isCollapsed" content="设置" placement="right">
-          <div class="settings-btn" :class="{ collapsed: isCollapsed }" @click="showSettings = true">
-            <el-icon :size="20"><Setting /></el-icon>
-            <transition name="fade">
-              <span v-if="!isCollapsed" class="settings-label">设置</span>
-            </transition>
-          </div>
-        </el-tooltip>
-        <el-tooltip v-else content="设置" placement="right">
-          <div class="settings-btn" :class="{ collapsed: isCollapsed }" @click="showSettings = true">
-            <el-icon :size="20"><Setting /></el-icon>
-            <transition name="fade">
-              <span v-if="!isCollapsed" class="settings-label">设置</span>
-            </transition>
-          </div>
-        </el-tooltip>
+        <div class="settings-btn" :class="{ collapsed: isCollapsed }" @click="showSettings = true">
+          <el-icon :size="20"><Setting /></el-icon>
+          <transition name="fade">
+            <span v-if="!isCollapsed" class="settings-label">设置</span>
+          </transition>
+        </div>
       </div>
     </aside>
 
@@ -72,17 +62,6 @@
             <input type="text" placeholder="搜索项目、数据库、表..." class="search-input" />
             <kbd class="shortcut-hint">Ctrl+K</kbd>
           </div>
-        </div>
-
-        <div class="header-right">
-          <button class="icon-btn" title="通知">
-            <el-badge :value="3" class="badge">
-              <el-icon :size="17"><Bell /></el-icon>
-            </el-badge>
-          </button>
-          <button class="icon-btn" title="设置" @click="showSettings = true">
-            <el-icon :size="17"><Setting /></el-icon>
-          </button>
         </div>
       </header>
 
@@ -114,12 +93,17 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SettingsDialog from '@/components/SettingsDialog.vue'
+import { useSettingsStore } from '@/stores/settings'
 
 const route = useRoute()
 const router = useRouter()
+const settingsStore = useSettingsStore()
 
 const isCollapsed = ref(false)
 const showSettings = ref(false)
+
+const menuTextColor = computed(() => settingsStore.isDark ? '#94a3b8' : '#64748B')
+const menuActiveTextColor = computed(() => settingsStore.isDark ? '#60a5fa' : '#3B82F6')
 
 const menuRoutes = computed(() => {
   return router.options.routes[0].children.filter(r => !r.meta?.hidden)
@@ -436,6 +420,106 @@ const resolvePath = (path) => {
 </style>
 
 <style lang="scss">
+html.dark {
+  .main-layout {
+    background: #252526 !important;
+  }
+
+  .sidebar {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
+  }
+
+  .logo-section {
+    border-color: #3c3c3c !important;
+  }
+
+  .logo-title {
+    color: #f8fafc !important;
+  }
+
+  .logo-subtitle {
+    color: #94a3b8 !important;
+  }
+
+  .sidebar-menu.el-menu {
+    --el-menu-hover-bg-color: #3c3c3c;
+  }
+
+  .sidebar-menu.el-menu .el-menu-item {
+    &:hover {
+      background: #3c3c3c !important;
+    }
+
+    &.is-active {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.15)) !important;
+
+      &::before {
+        background: #60a5fa !important;
+      }
+    }
+  }
+
+  .sidebar-bottom {
+    border-color: #3c3c3c !important;
+  }
+
+  .settings-btn {
+    color: #94a3b8 !important;
+
+    &:hover {
+      background: #3c3c3c !important;
+      color: #f8fafc !important;
+    }
+  }
+
+  .header {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
+  }
+
+  .page-title .title-text {
+    color: #f8fafc !important;
+  }
+
+  .icon-btn {
+    color: #94a3b8 !important;
+
+    &:hover {
+      background: #3c3c3c !important;
+      color: #f8fafc !important;
+    }
+  }
+
+  .search-box {
+    background: #3c3c3c !important;
+    border-color: transparent !important;
+
+    &:hover {
+      background: #4a4a4a !important;
+    }
+
+    &:focus-within {
+      background: #252526 !important;
+      border-color: #3b82f6 !important;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+    }
+  }
+
+  .search-input {
+    color: #f8fafc !important;
+
+    &::placeholder {
+      color: #94a3b8 !important;
+    }
+  }
+
+  .shortcut-hint {
+    background: #252526 !important;
+    color: #94a3b8 !important;
+  }
+}
+
 .settings-dialog.el-dialog {
   padding: 0 !important;
   overflow: hidden;

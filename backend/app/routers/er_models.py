@@ -1,12 +1,12 @@
 """ER model router - save/load models with node positions and version history."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import ERModel, ERModelVersion, Project
-from app.schemas import ERModelData, ERModelOut, ERModelVersionOut
+from app.schemas import ERModelData, ERModelOut, ERModelVersionCreate, ERModelVersionOut
 
 router = APIRouter(prefix="/api", tags=["er-models"])
 
@@ -58,7 +58,11 @@ def save_er_model(project_id: int, payload: ERModelData, db: Session = Depends(g
     response_model=ERModelVersionOut,
     status_code=status.HTTP_201_CREATED,
 )
-def save_er_model_version(project_id: int, db: Session = Depends(get_db)):
+def save_er_model_version(
+    project_id: int,
+    payload: ERModelVersionCreate = Body(...),
+    db: Session = Depends(get_db),
+):
     """Snapshot the current ER model as a versioned backup."""
     model = (
         db.query(ERModel)
@@ -81,6 +85,7 @@ def save_er_model_version(project_id: int, db: Session = Depends(get_db)):
         model_id=model.id,
         version_data=model.model_data,
         version_number=next_version,
+        note=payload.note,
     )
     db.add(version)
     db.commit()
@@ -113,3 +118,13 @@ def get_er_model_version(version_id: int, db: Session = Depends(get_db)):
     if not version:
         raise HTTPException(status_code=404, detail="版本不存在")
     return version
+
+
+@router.delete("/er-models/versions/{version_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_er_model_version(version_id: int, db: Session = Depends(get_db)):
+    """Delete a saved ER model version permanently."""
+    version = db.get(ERModelVersion, version_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="版本不存在")
+    db.delete(version)
+    db.commit()

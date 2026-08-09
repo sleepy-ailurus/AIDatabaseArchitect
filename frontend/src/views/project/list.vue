@@ -42,6 +42,7 @@
                 <el-dropdown-menu>
                   <el-dropdown-item @click.stop="openProject(p)"><el-icon><Share /></el-icon> 打开 ER 模型</el-dropdown-item>
                   <el-dropdown-item @click.stop="goConnection(p)"><el-icon><Connection /></el-icon> 连接配置</el-dropdown-item>
+                  <el-dropdown-item @click.stop="openVersions(p)"><el-icon><Clock /></el-icon> 版本列表</el-dropdown-item>
                   <el-dropdown-item divided style="color: #EF4444;" @click.stop="handleDelete(p)">
                     <el-icon><Delete /></el-icon> 删除
                   </el-dropdown-item>
@@ -116,6 +117,33 @@
         <el-button type="primary" :loading="creating" @click="handleCreate">创建项目</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="showVersions" :title="`版本历史 - ${versionProject?.name || ''}`" width="640px" :close-on-click-modal="false">
+      <div v-loading="versionLoading" class="version-list">
+        <div v-if="!versions.length" class="version-empty">
+          <el-empty description="暂无保存的版本" :image-size="80" />
+        </div>
+        <div v-else>
+          <div v-for="v in versions" :key="v.id" class="version-item">
+            <div class="version-info">
+              <div class="version-header">
+                <el-tag size="small" type="primary" effect="light">V{{ v.version_number }}</el-tag>
+                <span class="version-time">{{ formatTime(v.created_at) }}</span>
+              </div>
+              <div class="version-note">{{ v.note || '无备注' }}</div>
+            </div>
+            <div class="version-actions">
+              <el-button type="danger" link size="small" :loading="deleteId === v.id" @click="deleteVersionItem(v)">
+                删除版本
+              </el-button>
+              <el-button type="primary" link size="small" :loading="restoreId === v.id" @click="restoreVersion(v)">
+                恢复为此版本
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -128,6 +156,7 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 import { useProjectStore } from '@/stores/project'
 import { createProject as createProjectApi, deleteProject as deleteProjectApi } from '@/api/project'
+import { getVersions, getVersion, saveERModel, deleteVersion } from '@/api/erModel'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
@@ -140,6 +169,13 @@ const showCreate = ref(false)
 const loading = ref(false)
 const creating = ref(false)
 const createFormRef = ref()
+
+const showVersions = ref(false)
+const versionLoading = ref(false)
+const versionProject = ref(null)
+const versions = ref([])
+const restoreId = ref(null)
+const deleteId = ref(null)
 
 const createForm = reactive({
   name: '',
@@ -281,6 +317,69 @@ const handleDelete = async (p) => {
     loadProjects()
   } catch {
     // handled by interceptor
+  }
+}
+
+const openVersions = (p) => {
+  versionProject.value = p
+  showVersions.value = true
+  loadVersions(p.id)
+}
+
+const loadVersions = async (projectId) => {
+  versionLoading.value = true
+  try {
+    const data = await getVersions(projectId)
+    versions.value = Array.isArray(data) ? data : (data?.items || [])
+  } catch {
+    versions.value = []
+  } finally {
+    versionLoading.value = false
+  }
+}
+
+const restoreVersion = async (v) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将项目 "${versionProject.value.name}" 恢复到 V${v.version_number} 吗？当前 ER 模型将被覆盖。`,
+      '恢复确认',
+      { type: 'warning', confirmButtonText: '确认恢复', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  restoreId.value = v.id
+  try {
+    const versionData = await getVersion(v.id)
+    await saveERModel(versionProject.value.id, versionData.version_data)
+    ElMessage.success(`已恢复到 V${v.version_number}`)
+    loadProjects()
+  } catch {
+    // handled by interceptor
+  } finally {
+    restoreId.value = null
+  }
+}
+
+const deleteVersionItem = async (v) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除版本 V${v.version_number} 吗？该操作不可恢复。`,
+      '删除版本确认',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  deleteId.value = v.id
+  try {
+    await deleteVersion(v.id)
+    ElMessage.success(`已删除版本 V${v.version_number}`)
+    versions.value = versions.value.filter(item => item.id !== v.id)
+  } catch {
+    // handled by interceptor
+  } finally {
+    deleteId.value = null
   }
 }
 
@@ -426,5 +525,132 @@ onMounted(() => {
 .footer-left {
   display: flex;
   gap: 6px;
+}
+
+.version-list {
+  max-height: 460px;
+  overflow-y: auto;
+
+  .version-empty {
+    padding: 20px 0;
+  }
+
+  .version-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid $border-light;
+    border-radius: $radius-md;
+    margin-bottom: 10px;
+    background: $bg-white;
+    transition: $transition-base;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    &:hover {
+      border-color: rgba(59, 130, 246, 0.25);
+      background: rgba(59, 130, 246, 0.02);
+    }
+  }
+
+  .version-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .version-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .version-time {
+    font-size: 12px;
+    color: $text-secondary;
+  }
+
+  .version-note {
+    font-size: 13px;
+    color: $text-regular;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+
+  .version-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+html.dark {
+  .project-card {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+
+    &:hover {
+      background: #252526 !important;
+      border-color: rgba(59, 130, 246, 0.35) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+    }
+  }
+
+  .project-title {
+    color: #f8fafc !important;
+  }
+
+  .project-desc {
+    color: #94a3b8 !important;
+
+    &.empty {
+      color: #64748b !important;
+    }
+  }
+
+  .card-stats {
+    border-color: #3c3c3c !important;
+  }
+
+  .stat {
+    color: #94a3b8 !important;
+  }
+
+  .add-card {
+    background: transparent !important;
+    border-color: #3c3c3c !important;
+
+    &:hover {
+      border-color: #3b82f6 !important;
+      background: rgba(59, 130, 246, 0.06) !important;
+    }
+  }
+
+  .add-icon {
+    background: #3c3c3c !important;
+  }
+
+  .version-list {
+    .version-item {
+      background: #252526 !important;
+      border-color: #3c3c3c !important;
+
+      &:hover {
+        background: #252526 !important;
+        border-color: rgba(59, 130, 246, 0.3) !important;
+      }
+    }
+
+    .version-time,
+    .version-note {
+      color: #94a3b8 !important;
+    }
+  }
 }
 </style>

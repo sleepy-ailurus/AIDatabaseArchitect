@@ -34,7 +34,7 @@
     </g>
 
     <EdgeText
-      v-if="showLabel"
+      v-if="showLabel && !showFkLabel"
       :x="labelX"
       :y="labelY"
       :label="labelText"
@@ -42,6 +42,45 @@
       :label-show-bg="true"
       :label-bg-style="labelBgStyle"
     />
+
+    <!-- FK constraint name label (database constraint only) -->
+    <g
+      v-if="showFkLabel"
+      class="fk-label"
+      style="pointer-events: none;"
+      :transform="`translate(${fkLabelX}, ${fkLabelY})`"
+    >
+      <rect
+        x="0"
+        y="0"
+        :width="fkLabelWidth"
+        :height="fkLabelHeight"
+        :fill="isDark ? '#252526' : '#ffffff'"
+        :stroke="edgeColor"
+        rx="4"
+        stroke-width="1"
+        :opacity="0.95"
+      />
+      <svg x="5" y="4" width="12" height="12" viewBox="0 0 24 24">
+        <path
+          d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"
+          :stroke="edgeColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"
+        />
+      </svg>
+      <text
+        x="21"
+        y="10"
+        dominant-baseline="middle"
+        :fill="isDark ? '#e2e8f0' : '#334155'"
+        font-size="11"
+        font-weight="600"
+      >{{ constraintName }}</text>
+    </g>
+
     <div
       v-if="hovered"
       class="edge-delete-btn"
@@ -54,8 +93,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { BaseEdge, EdgeText, getSmoothStepPath } from '@vue-flow/core'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { EdgeText, getSmoothStepPath } from '@vue-flow/core'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -73,11 +112,25 @@ const props = defineProps({
 const emit = defineEmits(['delete'])
 
 const hovered = ref(false)
+const isDark = ref(false)
+
+let darkObserver = null
+onMounted(() => {
+  const html = document.documentElement
+  isDark.value = html.classList.contains('dark')
+  darkObserver = new MutationObserver(() => {
+    isDark.value = html.classList.contains('dark')
+  })
+  darkObserver.observe(html, { attributes: true, attributeFilter: ['class'] })
+})
+onUnmounted(() => {
+  darkObserver?.disconnect()
+})
 
 const sourceType = computed(() => props.data?.sourceType || 'database')
 
 const edgeColor = computed(() => {
-  const map = {
+  const lightMap = {
     database: '#3B82F6',
     database_constraint: '#3B82F6',
     ai: '#F59E0B',
@@ -85,7 +138,16 @@ const edgeColor = computed(() => {
     ai_confirmed: '#10B981',
     manual: '#10B981'
   }
-  return map[sourceType.value] || '#3B82F6'
+  const darkMap = {
+    database: '#60a5fa',
+    database_constraint: '#60a5fa',
+    ai: '#FBBF24',
+    ai_suggestion: '#FBBF24',
+    ai_confirmed: '#34D399',
+    manual: '#34D399'
+  }
+  const map = isDark.value ? darkMap : lightMap
+  return map[sourceType.value] || (isDark.value ? '#60a5fa' : '#3B82F6')
 })
 
 const isDashed = computed(() => {
@@ -107,24 +169,45 @@ const endMarkerType = computed(() => {
   return second === '1' ? 'tick' : 'crow'
 })
 
-const edgePathStyle = computed(() => ({
-  stroke: edgeColor.value,
-  strokeWidth: 2,
-  strokeDasharray: isDashed.value ? '5,5' : 'none',
-  fill: 'none'
-}))
-
-const showLabel = computed(() => {
-  return !!props.data?.cardinality || !!props.data?.confidence
+const edgePathStyle = computed(() => {
+  const base = {
+    stroke: edgeColor.value,
+    strokeWidth: isDark.value ? 2.5 : 2,
+    strokeDasharray: isDashed.value ? '5,5' : 'none',
+    fill: 'none'
+  }
+  if (isDark.value) {
+    base.filter = 'drop-shadow(0 0 3px rgba(96, 165, 250, 0.6))'
+  }
+  return base
 })
 
+const showLabel = computed(() => {
+  const conf = props.data?.confidence
+  return conf !== undefined && conf < 1
+})
+
+const constraintName = computed(() => props.data?.constraintName || '')
+const isDatabaseConstraint = computed(() =>
+  sourceType.value === 'database_constraint' ||
+  sourceType.value === 'database' && constraintName.value
+)
+const showFkLabel = computed(() => isDatabaseConstraint.value && !!constraintName.value)
+
+const FK_LABEL_HEIGHT = 20
+const fkLabelWidth = computed(() => {
+  const len = constraintName.value.length
+  return Math.max(72, len * 6.5 + 30)
+})
+const fkLabelX = computed(() => labelX.value - fkLabelWidth.value / 2)
+const fkLabelY = computed(() => labelY.value - FK_LABEL_HEIGHT - 6)
+
 const labelText = computed(() => {
-  const card = props.data?.cardinality || '1:N'
   const conf = props.data?.confidence
   if (conf !== undefined && conf < 1) {
-    return `${card} · ${(conf * 100).toFixed(0)}%`
+    return `${(conf * 100).toFixed(0)}%`
   }
-  return card
+  return ''
 })
 
 const labelStyle = computed(() => ({
@@ -134,7 +217,7 @@ const labelStyle = computed(() => ({
 }))
 
 const labelBgStyle = computed(() => ({
-  fill: 'white',
+  fill: isDark.value ? '#252526' : 'white',
   padding: '2px 5px',
   rx: 4
 }))
@@ -147,7 +230,7 @@ const pathComputed = computed(() => {
     targetX: props.targetX,
     targetY: props.targetY,
     targetPosition: props.targetPosition,
-    borderRadius: 10,
+    borderRadius: 4,
     // offset = distance the line endpoint sits back FROM the handle (into the line)
     // Decorations are drawn from handle center (0,0) outward into the line (+x, 0 to 10px)
     // This offset must be >= max decoration extent (crow tip at x=0 handle, circle at x=10)

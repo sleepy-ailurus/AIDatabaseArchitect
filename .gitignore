@@ -1,20 +1,32 @@
-# Vue / Frontend (前端依赖)
+# ============ Frontend (Vue / Vite) ============
 frontend/node_modules/
 frontend/dist/
-frontend/.vscode/
-frontend/.idea/
 
-# Python / Backend (后端依赖 - 适配 uv 管理)
+# ============ Backend (Python / uv) ============
 backend/__pycache__/
 backend/*.pyc
 backend/.venv/
-backend/venv/
-backend/env/
-backend/.python-version
-backend/.vscode/
-backend/.idea/
 
-# IDE / OS 系统文件（全局忽略）
+# ============ IDE / OS ============
 .vscode/
 .idea/
 .DS_Store
+
+# ============ Logs & local data ============
+*.log
+backend/app.db
+.workbuddy/
+
+# ============ Temporary build outputs ============
+# 连字符变体：dist-new / dist-verify / .build-check ...
+frontend/dist-*/
+frontend/.build-*/
+# 下划线变体：dist_tmp_* / dist_old_*（你之前被误收的主力）
+frontend/dist_*/
+
+# ============ Scratch / debug scripts ============
+# 一次性调试脚本，非项目源码
+frontend/test-*.mjs
+frontend/verify-fix.mjs
+# Vite 自动生成的临时配置
+frontend/vite.config.js.timestamp-*.mjs

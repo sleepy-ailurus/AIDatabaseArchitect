@@ -551,3 +551,68 @@ onMounted(() => {
   gap: 8px;
 }
 </style>
+
+<style lang="scss">
+html.dark {
+  .stat-cards .stat-card {
+    background: #252526 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+
+    &:hover {
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .stat-value {
+      color: #f8fafc !important;
+    }
+
+    .stat-label {
+      color: #94a3b8 !important;
+    }
+  }
+
+  .project-row {
+    &:hover {
+      background: #3c3c3c !important;
+    }
+
+    .project-name {
+      color: #f8fafc !important;
+    }
+  }
+
+  .step-list .step-item {
+    & + .step-item {
+      border-color: #3c3c3c !important;
+    }
+
+    .step-number {
+      background: #3c3c3c !important;
+      color: #94a3b8 !important;
+
+      &.done {
+        background: rgba(16, 185, 129, 0.15) !important;
+        color: #34d399 !important;
+      }
+    }
+
+    .step-title {
+      color: #f8fafc !important;
+    }
+
+    .step-desc {
+      color: #94a3b8 !important;
+    }
+  }
+
+  .task-list .task-item {
+    & + .task-item {
+      border-color: #3c3c3c !important;
+    }
+
+    .task-name {
+      color: #f8fafc !important;
+    }
+  }
+}
+</style>

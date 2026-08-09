@@ -215,11 +215,16 @@ class ERModelOut(ORMModel):
     updated_at: datetime
 
 
+class ERModelVersionCreate(BaseModel):
+    note: str | None = None
+
+
 class ERModelVersionOut(ORMModel):
     id: int
     model_id: int
     version_number: int
     version_data: dict | None
+    note: str | None
     created_at: datetime
 
 

@@ -33,7 +33,7 @@
                 <div class="config-label">主题模式</div>
                 <div class="config-desc">选择应用的外观主题</div>
               </div>
-              <el-radio-group v-model="general.theme">
+              <el-radio-group :model-value="settingsStore.theme" @change="settingsStore.setTheme">
                 <el-radio-button value="light">浅色</el-radio-button>
                 <el-radio-button value="dark">深色</el-radio-button>
                 <el-radio-button value="auto">跟随系统</el-radio-button>
@@ -44,7 +44,7 @@
                 <div class="config-label">语言</div>
                 <div class="config-desc">界面显示语言</div>
               </div>
-              <el-select v-model="general.language" style="width: 160px;">
+              <el-select :model-value="settingsStore.language" style="width: 160px;" @change="settingsStore.setLanguage">
                 <el-option label="简体中文" value="zh-CN" />
                 <el-option label="English" value="en-US" />
               </el-select>
@@ -354,10 +354,13 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getLLMConfigs, saveLLMConfig, deleteLLMConfig, testLLMConfig, updateLLMConfig } from '@/api/llm'
+import { useSettingsStore } from '@/stores/settings'
 
 defineEmits(['close'])
 
-const activeNav = ref('models')
+const settingsStore = useSettingsStore()
+
+const activeNav = ref('general')
 const expandedId = ref(null)
 const activeProviderId = ref(null)
 const activeCollapse = ref([])
@@ -1183,6 +1186,72 @@ onMounted(() => {
     display: flex;
     gap: 12px;
     margin-top: 24px;
+  }
+}
+
+// 深色模式适配
+html.dark .settings-root {
+  background: #252526;
+
+  :deep(.settings-header) {
+    background: #252526;
+    border-bottom-color: #3c3c3c;
+  }
+  :deep(.settings-title) { color: #f8fafc; }
+
+  :deep(.settings-nav) {
+    background: #252526;
+    border-right-color: #3c3c3c;
+  }
+  :deep(.nav-item) {
+    color: #94a3b8;
+    &:hover { background: rgba(59, 130, 246, 0.1); color: #e2e8f0; }
+    &.active { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+  }
+
+  :deep(.content-header) {
+    border-bottom-color: #3c3c3c;
+    h3 { color: #f8fafc; }
+    p { color: #94a3b8; }
+  }
+
+  :deep(.config-row) { border-bottom-color: #3c3c3c; }
+  :deep(.config-label) { color: #f8fafc; }
+  :deep(.config-desc) { color: #94a3b8; }
+  :deep(.shortcut-row) { border-bottom-color: #3c3c3c; }
+  :deep(.s-name) { color: #e2e8f0; }
+  :deep(.settings-footer) {
+    background: #252526;
+    border-top-color: #3c3c3c;
+  }
+
+  :deep(.about-section) {
+    .about-name { color: #f8fafc; }
+    .about-version { color: #94a3b8; }
+    .about-desc { color: #cbd5e1; }
+  }
+
+  :deep(.provider-card) {
+    background: #252526;
+    border-color: #3c3c3c;
+    &.expanded {
+      border-color: #3b82f6;
+      box-shadow: 0 2px 12px rgba(59, 130, 246, 0.15);
+    }
+  }
+  :deep(.card-header) {
+    &:hover { background: rgba(255, 255, 255, 0.03); }
+  }
+  :deep(.provider-name) { color: #f8fafc; }
+  :deep(.card-body) {
+    background: #252526;
+    border-top-color: #3c3c3c;
+  }
+  :deep(.field-label) { color: #e2e8f0; }
+  :deep(.add-provider-btn) {
+    border-color: #3c3c3c;
+    color: #94a3b8;
+    &:hover { border-color: #3b82f6; color: #60a5fa; background: rgba(59, 130, 246, 0.05); }
   }
 }
 </style>

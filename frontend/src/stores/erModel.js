@@ -9,17 +9,31 @@ export const useErModelStore = defineStore('erModel', () => {
   const loading = ref(false)
   const saving = ref(false)
 
-  const buildNodes = (tables) => {
+  const buildNodes = (tables, relationships) => {
     if (!Array.isArray(tables)) return []
     const cols = 4
     const colWidth = 280
     const rowHeight = 320
+
+    // Infer FK columns from relationships (schema API no longer returns table.foreign_keys).
+    const fkColumnsByTable = new Map()
+    if (Array.isArray(relationships)) {
+      for (const r of relationships) {
+        const table = r.source_table || r.from_table
+        const col = r.source_column || r.from_column
+        if (!table || !col) continue
+        if (!fkColumnsByTable.has(table)) fkColumnsByTable.set(table, new Set())
+        fkColumnsByTable.get(table).add(col)
+      }
+    }
+
     return tables.map((t, idx) => {
       const col = idx % cols
       const row = Math.floor(idx / cols)
       const table = t.table_name || t.name || ('table_' + idx)
       const position = t.position || { x: 40 + col * colWidth, y: 40 + row * rowHeight }
       const columns = t.columns || []
+      const fkColumns = fkColumnsByTable.get(table) || new Set()
       return {
         id: String(t.id ?? table),
         type: 'tableNode',
@@ -32,8 +46,8 @@ export const useErModelStore = defineStore('erModel', () => {
           columns: columns.map(c => ({
             name: c.name || c.column_name,
             type: c.type || c.column_type || c.data_type,
-            isPK: c.is_pk || c.isPK || c.column_key === 'PRI',
-            isFK: c.is_fk || c.isFK || c.column_key === 'MUL',
+            isPK: c.is_primary_key || c.is_pk || c.isPK || c.column_key === 'PRI',
+            isFK: fkColumns.has(c.name || c.column_name) || c.is_fk || c.isFK || c.column_key === 'MUL',
             isUnique: c.is_unique || c.isUnique || c.column_key === 'UNI',
             nullable: c.nullable !== false && c.is_nullable !== 'NO',
             default: c.default ?? c.column_default,
@@ -44,24 +58,108 @@ export const useErModelStore = defineStore('erModel', () => {
     })
   }
 
+  /**
+   * Repair key flags (PK/FK/Unique) on existing nodes using the latest schema tables
+   * and relationships. Preserves positions, sizes, and any user edits to column names.
+   */
+  const repairNodeKeyFlags = (existingNodes, tables, relationships) => {
+    if (!Array.isArray(existingNodes) || !existingNodes.length) return existingNodes
+    if (!Array.isArray(tables) || !tables.length) return existingNodes
+
+    const schemaByTable = new Map()
+    for (const t of tables) {
+      const tableName = t.table_name || t.name
+      if (!tableName) continue
+      const colMap = new Map()
+      for (const c of t.columns || []) {
+        const colName = c.name || c.column_name
+        if (colName) colMap.set(colName, c)
+      }
+      schemaByTable.set(tableName, colMap)
+    }
+
+    const fkColumnsByTable = new Map()
+    if (Array.isArray(relationships)) {
+      for (const r of relationships) {
+        const table = r.source_table || r.from_table
+        const col = r.source_column || r.from_column
+        if (!table || !col) continue
+        if (!fkColumnsByTable.has(table)) fkColumnsByTable.set(table, new Set())
+        fkColumnsByTable.get(table).add(col)
+      }
+    }
+
+    return existingNodes.map(node => {
+      const tableName = node.data?.name
+      const schemaCols = schemaByTable.get(tableName)
+      if (!schemaCols || !Array.isArray(node.data?.columns)) return node
+
+      const fkCols = fkColumnsByTable.get(tableName) || new Set()
+      const newColumns = node.data.columns.map(col => {
+        const schemaCol = schemaCols.get(col.name)
+        if (!schemaCol) return col
+        return {
+          ...col,
+          isPK: schemaCol.is_primary_key || schemaCol.is_pk || schemaCol.isPK || schemaCol.column_key === 'PRI',
+          isFK: fkCols.has(col.name) || schemaCol.is_fk || schemaCol.isFK || schemaCol.column_key === 'MUL',
+          isUnique: schemaCol.is_unique || schemaCol.isUnique || schemaCol.column_key === 'UNI'
+        }
+      })
+
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          columns: newColumns
+        }
+      }
+    })
+  }
+
   const buildEdges = (relationships) => {
     if (!Array.isArray(relationships)) return []
+
+    // Map table names -> current node ids, because nodes may use numeric DB ids
+    // while relationships use table names as source/target.
+    const nodeById = new Map()
+    const nodeByName = new Map()
+    for (const n of nodes.value || []) {
+      nodeById.set(String(n.id), n)
+      if (n.data?.name) nodeByName.set(n.data.name, n)
+    }
+    const resolveNodeId = (name) => {
+      if (!name) return ''
+      const byId = nodeById.get(String(name))
+      if (byId) return String(byId.id)
+      const byName = nodeByName.get(name)
+      if (byName) return String(byName.id)
+      return String(name)
+    }
+
+    const normalizeCardinality = (card) => {
+      const c = String(card || '1:N').toLowerCase()
+      if (c === 'one-to-one' || c === '1:1') return '1:1'
+      if (c === 'one-to-many' || c === '1:n') return '1:N'
+      if (c === 'many-to-one' || c === 'n:1') return 'N:1'
+      if (c === 'many-to-many' || c === 'n:n') return 'N:N'
+      return '1:N'
+    }
+
     return relationships.map((r, idx) => {
-      const sourceCol = r.source_column || r.from_column
-      const targetCol = r.target_column || r.to_column
       return {
         id: String(r.id ?? `e${idx}`),
-        source: String(r.source_table || r.from_table),
-        target: String(r.target_table || r.to_table),
-        sourceHandle: sourceCol ? `s-${sourceCol}` : undefined,
-        targetHandle: targetCol ? `t-${targetCol}` : undefined,
+        source: resolveNodeId(r.source_table || r.from_table),
+        target: resolveNodeId(r.target_table || r.to_table),
+        sourceHandle: 'right-source',
+        targetHandle: 'left-target',
         type: 'relationEdge',
         data: {
-          cardinality: r.cardinality || '1:N',
+          cardinality: normalizeCardinality(r.cardinality),
           sourceType: r.source_type || r.type || 'database',
           confidence: r.confidence ?? 1,
-          fromColumn: sourceCol,
-          toColumn: targetCol,
+          fromColumn: r.source_column || r.from_column || null,
+          toColumn: r.target_column || r.to_column || null,
+          constraintName: r.constraint_name || null,
           reason: r.reason || []
         }
       }
@@ -73,9 +171,12 @@ export const useErModelStore = defineStore('erModel', () => {
     try {
       const data = await erModelApi.getERModel(projectId)
       if (data) {
-        nodes.value = data.nodes?.length ? data.nodes : buildNodes(data.tables || [])
-        edges.value = data.edges?.length ? data.edges : buildEdges(data.relationships || [])
-        if (data.viewport) viewport.value = data.viewport
+        const model = data.model_data || {}
+        if (model.nodes?.length) {
+          nodes.value = model.nodes
+          edges.value = model.edges || []
+          if (model.viewport) viewport.value = model.viewport
+        }
       }
       return data
     } catch (e) {
@@ -142,6 +243,7 @@ export const useErModelStore = defineStore('erModel', () => {
     saving,
     buildNodes,
     buildEdges,
+    repairNodeKeyFlags,
     loadModel,
     saveModel,
     saveVersion,

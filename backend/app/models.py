@@ -178,6 +178,7 @@ class ERModelVersion(Base):
     )
     version_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     model: Mapped[ERModel] = relationship(back_populates="versions")

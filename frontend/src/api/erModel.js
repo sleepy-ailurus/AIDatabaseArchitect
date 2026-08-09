@@ -19,3 +19,7 @@ export function getVersions(projectId) {
 export function getVersion(versionId) {
   return request.get(`/er-models/versions/${versionId}`)
 }
+
+export function deleteVersion(versionId) {
+  return request.delete(`/er-models/versions/${versionId}`)
+}
