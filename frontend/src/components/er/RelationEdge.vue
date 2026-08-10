@@ -4,7 +4,25 @@
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
   >
-    <path :d="path" :style="edgePathStyle" />
+    <path
+      v-if="isDark"
+      :d="path"
+      :stroke="edgeColor"
+      stroke-width="5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      opacity="0.2"
+      fill="none"
+    />
+    <path
+      :d="path"
+      :stroke="edgeColor"
+      :stroke-width="isDark ? 2.5 : 2"
+      :stroke-dasharray="isDashed ? '5,5' : 'none'"
+      fill="none"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
 
     <!-- Start decoration
          +x direction = away from table, into the line (after rotation)
@@ -15,7 +33,7 @@
       <line x1="8" y1="-6" x2="8" y2="6" :stroke="edgeColor" stroke-width="2" stroke-linecap="round" />
     </g>
     <g v-else-if="startMarkerType === 'crow'" :transform="startCrowTransform">
-      <circle cx="10" cy="0" r="2.5" fill="white" :stroke="edgeColor" stroke-width="1.8" />
+      <circle cx="10" cy="0" r="2.5" :fill="isDark ? '#1e1e1e' : 'white'" :stroke="edgeColor" stroke-width="1.8" />
       <line x1="4" y1="0" x2="0" y2="-5" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
       <line x1="4" y1="0" x2="0" y2="0" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
       <line x1="4" y1="0" x2="0" y2="5" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
@@ -27,7 +45,7 @@
       <line x1="8" y1="-6" x2="8" y2="6" :stroke="edgeColor" stroke-width="2" stroke-linecap="round" />
     </g>
     <g v-else-if="endMarkerType === 'crow'" :transform="endCrowTransform">
-      <circle cx="10" cy="0" r="2.5" fill="white" :stroke="edgeColor" stroke-width="1.8" />
+      <circle cx="10" cy="0" r="2.5" :fill="isDark ? '#1e1e1e' : 'white'" :stroke="edgeColor" stroke-width="1.8" />
       <line x1="6" y1="0" x2="0" y2="-5" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
       <line x1="6" y1="0" x2="0" y2="0" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
       <line x1="6" y1="0" x2="0" y2="5" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
@@ -55,11 +73,11 @@
         y="0"
         :width="fkLabelWidth"
         :height="fkLabelHeight"
-        :fill="isDark ? '#252526' : '#ffffff'"
+        :fill="isDark ? '#2d2d2d' : '#ffffff'"
         :stroke="edgeColor"
         rx="4"
-        stroke-width="1"
-        :opacity="0.95"
+        stroke-width="1.5"
+        :opacity="0.97"
       />
       <svg x="5" y="4" width="12" height="12" viewBox="0 0 24 24">
         <path
@@ -169,19 +187,6 @@ const endMarkerType = computed(() => {
   return second === '1' ? 'tick' : 'crow'
 })
 
-const edgePathStyle = computed(() => {
-  const base = {
-    stroke: edgeColor.value,
-    strokeWidth: isDark.value ? 2.5 : 2,
-    strokeDasharray: isDashed.value ? '5,5' : 'none',
-    fill: 'none'
-  }
-  if (isDark.value) {
-    base.filter = 'drop-shadow(0 0 3px rgba(96, 165, 250, 0.6))'
-  }
-  return base
-})
-
 const showLabel = computed(() => {
   const conf = props.data?.confidence
   return conf !== undefined && conf < 1
@@ -217,7 +222,7 @@ const labelStyle = computed(() => ({
 }))
 
 const labelBgStyle = computed(() => ({
-  fill: isDark.value ? '#252526' : 'white',
+  fill: isDark.value ? '#2d2d2d' : 'white',
   padding: '2px 5px',
   rx: 4
 }))

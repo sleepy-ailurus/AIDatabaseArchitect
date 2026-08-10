@@ -1819,10 +1819,6 @@ html.dark {
     background: #1e1e1e !important;
   }
 
-  .vue-flow-canvas :deep(.vue-flow__container) {
-    background: #1e1e1e !important;
-  }
-
   .legend-bar {
     background: #252526 !important;
     border: 1px solid #3c3c3c !important;
