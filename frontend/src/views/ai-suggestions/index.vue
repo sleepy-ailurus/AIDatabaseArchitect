@@ -89,7 +89,7 @@
               </div>
 
               <div class="rel-arrow">
-                <div class="rel-type-badge">{{ s.cardinality_display || s.cardinality || 'N:1' }}</div>
+                <div class="rel-type-badge">{{ s.cardinality_display || s.cardinality || '1:N' }}</div>
                 <div class="arrow-line">
                   <div class="line"></div>
                   <el-icon :size="18" color="#64748B"><Right /></el-icon>
@@ -205,12 +205,12 @@ const normalizeSuggestion = (raw) => {
   const reason = Array.isArray(raw.reason) ? raw.reason
     : Array.isArray(raw.reasons) ? raw.reasons
     : (raw.reason ? [raw.reason] : [])
-  const cardinality = raw.cardinality || 'many-to-one'
+  const cardinality = raw.cardinality || 'one-to-many'
   const cardinalityMap = {
     'one-to-one': '1:1',
     'one-to-many': '1:N',
-    'many-to-one': 'N:1',
-    'many-to-many': 'N:M'
+    'many-to-one': '1:N',
+    'many-to-many': 'N:N'
   }
   return {
     id: raw.id,

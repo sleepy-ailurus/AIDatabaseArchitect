@@ -140,7 +140,8 @@ export const useErModelStore = defineStore('erModel', () => {
       const c = String(card || '1:N').toLowerCase()
       if (c === 'one-to-one' || c === '1:1') return '1:1'
       if (c === 'one-to-many' || c === '1:n') return '1:N'
-      if (c === 'many-to-one' || c === 'n:1') return 'N:1'
+      // Treat many-to-one (N:1) as one-to-many (1:N) since they are inverse relationships
+      if (c === 'many-to-one' || c === 'n:1') return '1:N'
       if (c === 'many-to-many' || c === 'n:n') return 'N:N'
       return '1:N'
     }

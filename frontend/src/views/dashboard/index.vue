@@ -2,12 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <div class="page-title">项目总览</div>
-        <div class="page-subtitle">欢迎回来，查看您的数据库分析项目进度</div>
+        <div class="page-title">{{ t('dashboard.title') }}</div>
+        <div class="page-subtitle">{{ t('dashboard.subtitle') }}</div>
       </div>
       <div>
         <el-button type="primary" :icon="Plus" @click="showCreateDialog = true">
-          新建项目
+          {{ t('dashboard.newProject') }}
         </el-button>
       </div>
     </div>
@@ -20,7 +20,7 @@
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.totalProjects }}</div>
-            <div class="stat-label">项目总数</div>
+            <div class="stat-label">{{ t('dashboard.totalProjects') }}</div>
           </div>
         </div>
       </el-col>
@@ -31,7 +31,7 @@
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.totalTables }}</div>
-            <div class="stat-label">数据库表数</div>
+            <div class="stat-label">{{ t('dashboard.totalTables') }}</div>
           </div>
         </div>
       </el-col>
@@ -42,7 +42,7 @@
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.totalRelations }}</div>
-            <div class="stat-label">关系总数</div>
+            <div class="stat-label">{{ t('dashboard.totalRelations') }}</div>
           </div>
         </div>
       </el-col>
@@ -53,7 +53,7 @@
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.aiSuggestions }}</div>
-            <div class="stat-label">AI建议待确认</div>
+            <div class="stat-label">{{ t('dashboard.aiSuggestionsPending') }}</div>
           </div>
         </div>
       </el-col>
@@ -64,15 +64,15 @@
         <div class="card">
           <div class="flex-between mb-16">
             <div>
-              <div style="font-size: 16px; font-weight: 600;">最近项目</div>
-              <div style="font-size: 12px; color: #94A3B8; margin-top: 2px;">您最近访问的数据库分析项目</div>
+              <div style="font-size: 16px; font-weight: 600;">{{ t('dashboard.recentProjects') }}</div>
+              <div style="font-size: 12px; color: #94A3B8; margin-top: 2px;">{{ t('dashboard.recentProjectsDesc') }}</div>
             </div>
             <el-button text type="primary" @click="$router.push('/projects')">
-              查看全部 <el-icon style="margin-left: 2px;"><ArrowRight /></el-icon>
+              {{ t('dashboard.viewAll') }} <el-icon style="margin-left: 2px;"><ArrowRight /></el-icon>
             </el-button>
           </div>
 
-          <el-empty v-if="!loading && recentProjects.length === 0" description="暂无项目，点击右上角新建一个吧" />
+          <el-empty v-if="!loading && recentProjects.length === 0" :description="t('dashboard.noProjects')" />
           <el-table v-else :data="recentProjects" style="width: 100%" :show-header="false">
             <el-table-column>
               <template #default="{ row }">
@@ -81,13 +81,13 @@
                     <el-icon :size="20" :color="getProjectColor(row.id)"><DataBase /></el-icon>
                   </div>
                   <div class="project-info">
-                    <div class="project-name">{{ row.name }}</div>
+                    <div class="project-name">{{ tData('projectNames', row.name) }}</div>
                     <div class="project-meta">
                       <el-tag size="small" effect="plain" :type="getDbTypeTag(row.db_type || row.dbType)">
                         {{ getDbTypeLabel(row.db_type || row.dbType) }}
                       </el-tag>
                       <span style="color: #94A3B8; margin-left: 8px;">
-                        {{ row.table_count || row.tables || 0 }} 张表 · {{ row.relation_count || row.relations || 0 }} 条关系
+                        {{ row.table_count || row.tables || 0 }} {{ t('dashboard.tables') }} · {{ row.relation_count || row.relations || 0 }} {{ t('dashboard.relations') }}
                       </span>
                     </div>
                   </div>
@@ -97,7 +97,7 @@
                     </el-tag>
                   </div>
                   <div class="project-time">
-                    <div style="font-size: 12px; color: #94A3B8;">更新于</div>
+                    <div style="font-size: 12px; color: #94A3B8;">{{ t('dashboard.updatedAt') }}</div>
                     <div style="font-size: 13px; color: #64748B; margin-top: 2px;">{{ formatTime(row.updated_at || row.updatedAt) }}</div>
                   </div>
                   <el-icon :size="18" color="#CBD5E1" class="arrow-icon"><ArrowRight /></el-icon>
@@ -111,44 +111,44 @@
       <el-col :span="8">
         <div class="card">
           <div class="mb-16">
-            <div style="font-size: 16px; font-weight: 600;">快速开始</div>
-            <div style="font-size: 12px; color: #94A3B8; margin-top: 2px;">按步骤完成您的第一次分析</div>
+            <div style="font-size: 16px; font-weight: 600;">{{ t('dashboard.quickStart') }}</div>
+            <div style="font-size: 12px; color: #94A3B8; margin-top: 2px;">{{ t('dashboard.quickStartDesc') }}</div>
           </div>
 
           <div class="step-list">
             <div class="step-item" :class="{ done: recentProjects.length > 0 }">
               <div class="step-number done"><el-icon><Check /></el-icon></div>
               <div class="step-content">
-                <div class="step-title">创建项目</div>
-                <div class="step-desc">为分析任务创建一个工作区</div>
+                <div class="step-title">{{ t('dashboard.step1') }}</div>
+                <div class="step-desc">{{ t('dashboard.step1Desc') }}</div>
               </div>
             </div>
             <div class="step-item">
               <div class="step-number">2</div>
               <div class="step-content">
-                <div class="step-title">配置连接</div>
-                <div class="step-desc">使用只读账号连接目标数据库</div>
+                <div class="step-title">{{ t('dashboard.step2') }}</div>
+                <div class="step-desc">{{ t('dashboard.step2Desc') }}</div>
               </div>
             </div>
             <div class="step-item">
               <div class="step-number">3</div>
               <div class="step-content">
-                <div class="step-title">Schema 解析</div>
-                <div class="step-desc">读取数据库表结构和索引信息</div>
+                <div class="step-title">{{ t('dashboard.step3') }}</div>
+                <div class="step-desc">{{ t('dashboard.step3Desc') }}</div>
               </div>
             </div>
             <div class="step-item">
               <div class="step-number">4</div>
               <div class="step-content">
-                <div class="step-title">确认关系</div>
-                <div class="step-desc">审核AI推断的潜在逻辑外键</div>
+                <div class="step-title">{{ t('dashboard.step4') }}</div>
+                <div class="step-desc">{{ t('dashboard.step4Desc') }}</div>
               </div>
             </div>
             <div class="step-item">
               <div class="step-number">5</div>
               <div class="step-content">
-                <div class="step-title">导出文档</div>
-                <div class="step-desc">生成完整的数据库设计文档</div>
+                <div class="step-title">{{ t('dashboard.step5') }}</div>
+                <div class="step-desc">{{ t('dashboard.step5Desc') }}</div>
               </div>
             </div>
           </div>
@@ -156,54 +156,54 @@
 
         <div class="card mt-16">
           <div class="mb-16">
-            <div style="font-size: 16px; font-weight: 600;">任务状态</div>
+            <div style="font-size: 16px; font-weight: 600;">{{ t('dashboard.taskStatus') }}</div>
           </div>
           <div class="task-list" v-if="recentProjects.length > 0">
             <div class="task-item" v-for="p in recentProjects.slice(0, 3)" :key="p.id">
               <div class="flex-between">
-                <div class="task-name">{{ p.name }}</div>
+                <div class="task-name">{{ tData('projectNames', p.name) }}</div>
                 <el-tag size="small" :type="getStatusTag(p.status)">{{ getStatusLabel(p.status) }}</el-tag>
               </div>
               <div style="font-size: 12px; color: #94A3B8; margin-top: 4px;">
-                {{ p.table_count || p.tables || 0 }} 张表 · {{ p.relation_count || p.relations || 0 }} 条关系
+                {{ p.table_count || p.tables || 0 }} {{ t('dashboard.tables') }} · {{ p.relation_count || p.relations || 0 }} {{ t('dashboard.relations') }}
               </div>
             </div>
           </div>
-          <el-empty v-else description="暂无任务" :image-size="60" />
+          <el-empty v-else :description="t('dashboard.noTasks')" :image-size="60" />
         </div>
       </el-col>
     </el-row>
 
-    <el-dialog v-model="showCreateDialog" title="新建分析项目" width="560px" :close-on-click-modal="false">
+    <el-dialog v-model="showCreateDialog" :title="t('project.form.titleNew')" width="560px" :close-on-click-modal="false">
       <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="100px" style="margin-top: 8px;">
-        <el-form-item label="项目名称" prop="name">
-          <el-input v-model="createForm.name" placeholder="例如：电商核心数据库分析" />
+        <el-form-item :label="t('project.form.name')" prop="name">
+          <el-input v-model="createForm.name" :placeholder="t('project.form.namePlaceholder')" />
         </el-form-item>
-        <el-form-item label="项目描述">
-          <el-input v-model="createForm.description" type="textarea" :rows="3" placeholder="简要描述项目用途和目标数据库..." />
+        <el-form-item :label="t('project.form.description')">
+          <el-input v-model="createForm.description" type="textarea" :rows="3" :placeholder="t('project.form.descriptionPlaceholder')" />
         </el-form-item>
-        <el-form-item label="数据库类型" prop="db_type">
-          <el-select v-model="createForm.db_type" style="width: 100%;" placeholder="选择数据库类型">
+        <el-form-item :label="t('project.form.dbType')" prop="db_type">
+          <el-select v-model="createForm.db_type" style="width: 100%;" :placeholder="t('project.form.selectDbType')">
             <el-option label="MySQL 8.x" value="mysql">
               <div class="db-option">
                 <el-icon color="#4479A1"><Coin /></el-icon>
                 <span>MySQL 8.x</span>
-                <el-tag size="small" type="success">推荐</el-tag>
+                <el-tag size="small" type="success">{{ t('project.form.recommended') }}</el-tag>
               </div>
             </el-option>
             <el-option label="PostgreSQL 14+" value="postgresql" disabled>
               <div class="db-option">
                 <el-icon color="#336791"><Coin /></el-icon>
                 <span>PostgreSQL 14+</span>
-                <el-tag size="small" type="info">即将支持</el-tag>
+                <el-tag size="small" type="info">{{ t('connection.soonSupported') }}</el-tag>
               </div>
             </el-option>
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="handleCreate">创建项目</el-button>
+        <el-button @click="showCreateDialog = false">{{ t('project.form.cancel') }}</el-button>
+        <el-button type="primary" :loading="creating" @click="handleCreate">{{ t('project.form.create') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -212,15 +212,17 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import 'dayjs/locale/zh-cn'
 import { useProjectStore } from '@/stores/project'
 import { createProject } from '@/api/project'
+import { useDataI18n } from '@/i18n'
 
+const { t, locale } = useI18n()
+const { tData } = useDataI18n()
 dayjs.extend(relativeTime)
-dayjs.locale('zh-cn')
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -245,8 +247,8 @@ const createForm = reactive({
 })
 
 const createRules = {
-  name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
-  db_type: [{ required: true, message: '请选择数据库类型', trigger: 'change' }]
+  name: [{ required: true, message: () => t('project.form.nameRequired'), trigger: 'blur' }],
+  db_type: [{ required: true, message: () => t('project.form.dbTypeRequired'), trigger: 'change' }]
 }
 
 const projectColors = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899', '#8B5CF6']
@@ -277,19 +279,20 @@ const getStatusTag = (status) => {
 }
 
 const getStatusLabel = (status) => {
-  const map = {
-    analyzing: '分析中',
-    completed: '已完成',
-    pending: '待确认',
-    draft: '草稿',
-    connected: '已连接'
+  const keyMap = {
+    analyzing: 'dashboard.status.analyzing',
+    completed: 'dashboard.status.completed',
+    pending: 'dashboard.status.pending',
+    draft: 'dashboard.status.draft',
+    connected: 'dashboard.status.connected'
   }
-  return map[status] || status || '草稿'
+  return t(keyMap[status] || 'dashboard.status.draft')
 }
 
 const formatTime = (time) => {
   if (!time) return '-'
   try {
+    dayjs.locale(locale.value === 'zh-CN' ? 'zh-cn' : 'en')
     return dayjs(time).fromNow()
   } catch {
     return String(time)
@@ -350,7 +353,7 @@ const handleCreate = async () => {
       description: createForm.description,
       db_type: createForm.db_type
     })
-    ElMessage.success('项目创建成功')
+    ElMessage.success(t('project.list.projectCreated'))
     showCreateDialog.value = false
     createForm.name = ''
     createForm.description = ''

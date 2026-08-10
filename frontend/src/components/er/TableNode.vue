@@ -29,7 +29,7 @@
         />
       </div>
       <div class="header-actions">
-        <span class="field-count" v-if="data.columns">{{ data.columns.length }} 字段</span>
+        <span class="field-count" v-if="data.columns">{{ t('erModel.node.fieldCount', { count: data.columns.length }) }}</span>
         <el-dropdown trigger="click" @command="handleMenuCommand">
           <el-button text circle size="small" class="more-btn" @click.stop>
             <el-icon :size="14"><MoreFilled /></el-icon>
@@ -37,13 +37,13 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="addColumn">
-                <el-icon><Plus /></el-icon> 添加字段
+                <el-icon><Plus /></el-icon> {{ t('erModel.node.addField') }}
               </el-dropdown-item>
               <el-dropdown-item command="copy">
-                <el-icon><CopyDocument /></el-icon> 复制表
+                <el-icon><CopyDocument /></el-icon> {{ t('erModel.node.duplicate') }}
               </el-dropdown-item>
               <el-dropdown-item command="delete" divided style="color: #EF4444;">
-                <el-icon><Delete /></el-icon> 删除表
+                <el-icon><Delete /></el-icon> {{ t('erModel.node.delete') }}
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -64,16 +64,16 @@
         }"
       >
         <span class="col-key">
-          <span v-if="col.isPK" class="key-icon pk" title="主键">🔑</span>
-          <span v-else-if="col.isFK" class="key-icon fk" title="外键">🔗</span>
-          <span v-else-if="col.isUnique" class="key-icon uk" title="唯一">🔐</span>
-          <span v-else-if="col.aiSuggested" class="key-icon ai" title="AI建议">✨</span>
+          <span v-if="col.isPK" class="key-icon pk" :title="t('erModel.node.primaryKey')">🔑</span>
+          <span v-else-if="col.isFK" class="key-icon fk" :title="t('erModel.node.foreignKey')">🔗</span>
+          <span v-else-if="col.isUnique" class="key-icon uk" :title="t('erModel.node.unique')">🔐</span>
+          <span v-else-if="col.aiSuggested" class="key-icon ai" :title="t('erModel.node.aiSuggest')">✨</span>
         </span>
         <span class="col-name">{{ col.name }}</span>
         <span class="col-type" :class="getTypeClass(col.type)">{{ col.type }}</span>
       </div>
       <div v-if="data.columns && data.columns.length > maxDisplay" class="more-fields">
-        + {{ data.columns.length - maxDisplay }} 个字段
+        + {{ t('erModel.node.moreFields', { count: data.columns.length - maxDisplay }) }}
       </div>
       <div class="column-footer" v-if="data.comment">
         {{ data.comment }}
@@ -126,8 +126,11 @@
 
 <script setup>
 import { computed, ref, nextTick, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
 import { ElMessageBox, ElMessage } from 'element-plus'
+
+const { t } = useI18n()
 
 const props = defineProps({
   data: { type: Object, default: () => ({}) },
@@ -206,9 +209,9 @@ const handleMenuCommand = async (cmd) => {
   } else if (cmd === 'delete') {
     try {
       await ElMessageBox.confirm(
-        `确定要删除表 "${props.data.name}" 吗？所有相关关系也会被移除。`,
-        '删除确认',
-        { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+        t('erModel.node.deleteConfirmMsg', { name: props.data.name }),
+        t('erModel.node.deleteConfirmTitle'),
+        { type: 'warning', confirmButtonText: t('erModel.node.deleteConfirmBtn'), cancelButtonText: t('common.cancel') }
       )
       nodeActions?.deleteNode(nodeId)
     } catch {

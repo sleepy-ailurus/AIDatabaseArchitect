@@ -2,7 +2,7 @@
   <div class="settings-root">
     <div class="settings-header">
       <el-icon :size="22" color="#3B82F6"><Setting /></el-icon>
-      <span class="settings-title">设置</span>
+      <span class="settings-title">{{ t('settings.title') }}</span>
     </div>
 
     <div class="settings-body">
@@ -17,56 +17,56 @@
           <el-icon :size="16">
             <component :is="item.icon" />
           </el-icon>
-          <span>{{ item.label }}</span>
+          <span>{{ t(`settings.nav.${item.key}`) }}</span>
         </div>
       </aside>
 
       <div class="settings-content">
         <template v-if="activeNav === 'general'">
           <div class="content-header">
-            <h3>通用配置</h3>
-            <p>调整应用基础设置</p>
+            <h3>{{ t('settings.general.title') }}</h3>
+            <p>{{ t('settings.general.desc') }}</p>
           </div>
           <div class="config-section">
             <div class="config-row">
               <div class="config-info">
-                <div class="config-label">主题模式</div>
-                <div class="config-desc">选择应用的外观主题</div>
+                <div class="config-label">{{ t('settings.general.theme') }}</div>
+                <div class="config-desc">{{ t('settings.general.themeDesc') }}</div>
               </div>
               <el-radio-group :model-value="settingsStore.theme" @change="settingsStore.setTheme">
-                <el-radio-button value="light">浅色</el-radio-button>
-                <el-radio-button value="dark">深色</el-radio-button>
-                <el-radio-button value="auto">跟随系统</el-radio-button>
+                <el-radio-button value="light">{{ t('settings.general.light') }}</el-radio-button>
+                <el-radio-button value="dark">{{ t('settings.general.dark') }}</el-radio-button>
+                <el-radio-button value="auto">{{ t('settings.general.auto') }}</el-radio-button>
               </el-radio-group>
             </div>
             <div class="config-row">
               <div class="config-info">
-                <div class="config-label">语言</div>
-                <div class="config-desc">界面显示语言</div>
+                <div class="config-label">{{ t('settings.general.language') }}</div>
+                <div class="config-desc">{{ t('settings.general.languageDesc') }}</div>
               </div>
               <el-select :model-value="settingsStore.language" style="width: 160px;" @change="settingsStore.setLanguage">
-                <el-option label="简体中文" value="zh-CN" />
-                <el-option label="English" value="en-US" />
+                <el-option :label="t('settings.general.zhCN')" value="zh-CN" />
+                <el-option :label="t('settings.general.enUS')" value="en-US" />
               </el-select>
             </div>
             <div class="config-row">
               <div class="config-info">
-                <div class="config-label">自动保存分析结果</div>
-                <div class="config-desc">分析完成后自动保存到本地</div>
+                <div class="config-label">{{ t('settings.general.autoSave') }}</div>
+                <div class="config-desc">{{ t('settings.general.autoSaveDesc') }}</div>
               </div>
               <el-switch v-model="general.autoSave" />
             </div>
             <div class="config-row">
               <div class="config-info">
-                <div class="config-label">显示 AI 推断置信度</div>
-                <div class="config-desc">在建议列表中显示模型置信度百分比</div>
+                <div class="config-label">{{ t('settings.general.showConfidence') }}</div>
+                <div class="config-desc">{{ t('settings.general.showConfidenceDesc') }}</div>
               </div>
               <el-switch v-model="general.showConfidence" />
             </div>
             <div class="config-row">
               <div class="config-info">
-                <div class="config-label">高置信度默认勾选</div>
-                <div class="config-desc">置信度 >= 85% 的建议默认标记为已确认</div>
+                <div class="config-label">{{ t('settings.general.autoCheckHigh') }}</div>
+                <div class="config-desc">{{ t('settings.general.autoCheckHighDesc') }}</div>
               </div>
               <el-switch v-model="general.autoCheckHigh" />
             </div>
@@ -75,7 +75,7 @@
 
         <template v-if="activeNav === 'models'">
           <div class="content-header">
-            <h3>模型配置</h3>
+            <h3>{{ t('settings.nav.models') }}</h3>
           </div>
 
           <div class="models-wrapper" v-loading="loadingConfigs">
@@ -96,7 +96,7 @@
                         @change="activeProviderId = provider.id; selectProvider(provider)"
                         @click.stop
                       />
-                      <span class="provider-name">{{ provider.name || '未命名供应商' }}</span>
+                      <span class="provider-name">{{ provider.name || t('llm.provider.namePlaceholder') }}</span>
                     </div>
                     <div class="card-header-right">
                       <el-switch
@@ -121,8 +121,8 @@
 
                   <div class="card-body" v-show="expandedId === provider.id">
                     <div class="body-section">
-                      <div class="field-label">供应商名称</div>
-                      <el-input v-model="provider.name" placeholder="请输入供应商名称" />
+                      <div class="field-label">{{ t('llm.provider.name') }}</div>
+                      <el-input v-model="provider.name" :placeholder="t('llm.provider.namePlaceholder')" />
                     </div>
 
                     <div class="body-section">
@@ -131,7 +131,7 @@
                           <template #title>
                             <span class="curl-title">
                               <el-icon><Promotion /></el-icon>
-                              Curl 导入
+                              {{ t('llm.provider.curlImport') }}
                             </span>
                           </template>
                           <div class="curl-import">
@@ -139,16 +139,16 @@
                               v-model="curlText"
                               type="textarea"
                               :rows="4"
-                              placeholder="粘贴 curl 命令，自动解析配置..."
+                              :placeholder="t('llm.provider.curlPlaceholder')"
                             />
-                            <el-button type="primary" size="small" @click="importFromCurl(provider)">导入</el-button>
+                            <el-button type="primary" size="small" @click="importFromCurl(provider)">{{ t('llm.provider.import') }}</el-button>
                           </div>
                         </el-collapse-item>
                       </el-collapse>
                     </div>
 
                     <div class="body-section">
-                      <div class="field-label">API 协议</div>
+                      <div class="field-label">{{ t('llm.provider.protocol') }}</div>
                       <div class="protocol-tabs">
                         <div
                           v-for="p in protocols"
@@ -166,19 +166,19 @@
                           <template #title>
                             <span class="ref-title">
                               <el-icon><Document /></el-icon>
-                              参考配置（{{ provider.protocol }} 案例）
+                              {{ t('llm.provider.endpoint') }} ({{ provider.protocol }})
                             </span>
                           </template>
                           <div class="ref-config">
                             <div class="ref-endpoint">
-                              <span class="ref-label">端点路径：</span>
+                              <span class="ref-label">{{ t('llm.provider.endpoint') }}:</span>
                               <el-radio-group v-model="provider.endpoint_path" size="small">
                                 <el-radio-button value="/chat/completions">/chat/completions</el-radio-button>
                                 <el-radio-button value="/responses">/responses</el-radio-button>
                               </el-radio-group>
                             </div>
                             <div class="ref-url">
-                              <div class="ref-label">Base URL（不含端点路径，结尾一般 v1/v4 等。完整路径，即是 curl 请求地址。）</div>
+                              <div class="ref-label">{{ t('llm.provider.baseUrl') }}</div>
                               <el-input v-model="provider.base_url" />
                               <div class="preset-tags">
                                 <span
@@ -196,12 +196,12 @@
                     </div>
 
                     <div class="body-section">
-                      <div class="field-label">密钥</div>
+                      <div class="field-label">{{ t('llm.provider.apiKey') }}</div>
                       <div class="key-input-wrap">
                         <el-input
                           v-model="provider.api_key"
                           :type="showKeyMap[provider.id] ? 'text' : 'password'"
-                          placeholder="sk-..."
+                          :placeholder="t('llm.provider.apiKey')"
                         />
                         <el-icon
                           class="key-toggle"
@@ -215,7 +215,7 @@
 
                     <div class="body-section inline-fields">
                       <div class="inline-field">
-                        <div class="field-label">超时时间（秒）</div>
+                        <div class="field-label">{{ t('llm.provider.timeout') }}</div>
                         <div class="timeout-input">
                           <el-input-number
                             v-model="provider.timeout"
@@ -223,7 +223,7 @@
                             :max="600"
                             controls-position="right"
                           />
-                          <span class="unit">秒</span>
+                          <span class="unit">{{ t('llm.provider.timeoutDesc') }}</span>
                         </div>
                       </div>
                     </div>
@@ -231,7 +231,7 @@
                     <div class="body-section">
                       <div class="rate-limit-row">
                         <div class="rate-limit-left">
-                          <el-checkbox v-model="provider.rateUnlimited">不限制</el-checkbox>
+                          <el-checkbox v-model="provider.rateUnlimited">{{ t('llm.provider.unlimited') }}</el-checkbox>
                         </div>
                         <div class="rate-limit-right" v-if="!provider.rateUnlimited">
                           <el-slider
@@ -246,22 +246,22 @@
                         </div>
                         <div v-else class="rate-value-unlimited">0</div>
                       </div>
-                      <div class="field-label rate-label">请求频率限制（0=不限制，1-200）</div>
+                      <div class="field-label rate-label">{{ t('llm.provider.rateLimitDesc') }}</div>
                     </div>
 
                     <div class="body-section">
-                      <div class="field-label">模型</div>
+                      <div class="field-label">{{ t('llm.provider.models') }}</div>
                       <div class="model-input-row">
                         <el-input
                           v-model="provider.newModel"
-                          placeholder="e.g., gpt-4"
+                          :placeholder="t('llm.provider.modelPlaceholder')"
                           @keyup.enter="addModel(provider)"
                         />
                         <el-button
                           type="primary"
                           :icon="Plus"
                           @click="addModel(provider)"
-                        >添加模型</el-button>
+                        >{{ t('llm.provider.addModel') }}</el-button>
                       </div>
                       <div class="model-tags" v-if="provider.models.length">
                         <el-tag
@@ -279,20 +279,20 @@
                         :icon="Connection"
                         :loading="provider._testing"
                         @click="testProvider(provider)"
-                      >测试连接</el-button>
+                      >{{ t('llm.provider.testConnection') }}</el-button>
                       <el-button
                         type="primary"
                         :icon="Check"
                         :loading="provider._saving"
                         @click="saveProvider(provider)"
-                      >{{ provider.id && !provider._isNew ? '保存配置' : '创建配置' }}</el-button>
+                      >{{ provider.id && !provider._isNew ? t('llm.provider.saveConfig') : t('llm.provider.createConfig') }}</el-button>
                       <el-tag
                         v-if="provider._testResult"
                         :type="provider._testResult.ok ? 'success' : 'danger'"
                         size="small"
                         effect="light"
                       >
-                        {{ provider._testResult.ok ? '连接成功' : '连接失败' }}
+                        {{ provider._testResult.ok ? t('llm.provider.connected') : t('llm.provider.connectFailed') }}
                       </el-tag>
                     </div>
                   </div>
@@ -301,7 +301,7 @@
 
               <div class="add-provider-btn" @click="addProvider">
                 <el-icon :size="18"><Plus /></el-icon>
-                <span>添加新供应商</span>
+                <span>{{ t('settings.llm.addProvider') }}</span>
               </div>
             </div>
           </div>
@@ -309,12 +309,12 @@
 
         <template v-if="activeNav === 'shortcuts'">
           <div class="content-header">
-            <h3>快捷键</h3>
-            <p>自定义操作快捷键</p>
+            <h3>{{ t('settings.nav.shortcuts') }}</h3>
+            <p>{{ t('settings.desc') }}</p>
           </div>
           <div class="shortcut-list">
             <div v-for="s in shortcuts" :key="s.name" class="shortcut-row">
-              <span class="s-name">{{ s.name }}</span>
+              <span class="s-name">{{ t(`settings.shortcuts.${s.key}`) }}</span>
               <el-input v-model="s.keys" size="small" style="width: 200px;" />
             </div>
           </div>
@@ -322,22 +322,21 @@
 
         <template v-if="activeNav === 'about'">
           <div class="content-header">
-            <h3>关于</h3>
+            <h3>{{ t('settings.nav.about') }}</h3>
           </div>
           <div class="about-section">
             <div class="about-logo">
               <el-icon :size="40" color="#3B82F6"><DataBase /></el-icon>
             </div>
             <div class="about-name">AI Database Architect</div>
-            <div class="about-version">版本 v0.1.0</div>
+            <div class="about-version">{{ t('settings.about.version') }}</div>
             <div class="about-desc">
-              智能数据库 Schema 分析、逻辑外键推断与 ER 模型生成平台。<br/>
-              通过 Schema 自动解析、规则候选生成、AI 语义判断、可视化 ER 编辑和文档导出，帮助开发人员快速建立可靠的数据库结构认知。
+              {{ t('settings.about.desc') }}
             </div>
             <div class="about-links">
-              <el-button text type="primary" size="small"><el-icon><Link /></el-icon> 文档</el-button>
-              <el-button text type="primary" size="small"><el-icon><ChatDotRound /></el-icon> 反馈</el-button>
-              <el-button text type="primary" size="small"><el-icon><InfoFilled /></el-icon> 更新日志</el-button>
+              <el-button text type="primary" size="small"><el-icon><Link /></el-icon> {{ t('settings.about.docs') }}</el-button>
+              <el-button text type="primary" size="small"><el-icon><ChatDotRound /></el-icon> {{ t('settings.about.feedback') }}</el-button>
+              <el-button text type="primary" size="small"><el-icon><InfoFilled /></el-icon> {{ t('settings.about.changelog') }}</el-button>
             </div>
           </div>
         </template>
@@ -345,17 +344,19 @@
     </div>
 
     <div class="settings-footer">
-      <el-button @click="$emit('close')">关闭</el-button>
+      <el-button @click="$emit('close')">{{ t('settings.buttons.close') }}</el-button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getLLMConfigs, saveLLMConfig, deleteLLMConfig, testLLMConfig, updateLLMConfig } from '@/api/llm'
 import { useSettingsStore } from '@/stores/settings'
 
+const { t } = useI18n()
 defineEmits(['close'])
 
 const settingsStore = useSettingsStore()
@@ -376,7 +377,7 @@ const navItems = [
 ]
 
 const general = reactive({
-  theme: 'light',
+  theme: 'auto',
   language: 'zh-CN',
   autoSave: true,
   showConfidence: true,
@@ -384,11 +385,11 @@ const general = reactive({
 })
 
 const shortcuts = reactive([
-  { name: '新建项目', keys: 'Ctrl + N' },
-  { name: '保存模型', keys: 'Ctrl + S' },
-  { name: '自动布局', keys: 'Ctrl + L' },
-  { name: '导出文档', keys: 'Ctrl + E' },
-  { name: '打开设置', keys: 'Ctrl + ,' }
+  { key: 'newProject', name: '新建项目', keys: 'Ctrl + N' },
+  { key: 'saveModel', name: '保存模型', keys: 'Ctrl + S' },
+  { key: 'autoLayout', name: '自动布局', keys: 'Ctrl + L' },
+  { key: 'exportDoc', name: '导出文档', keys: 'Ctrl + E' },
+  { key: 'openSettings', name: '打开设置', keys: 'Ctrl + ,' }
 ])
 
 const protocols = ['OpenAI', 'DeepSeek']
@@ -451,7 +452,7 @@ const loadConfigs = async () => {
       activeProviderId.value = providers[0].id
     }
   } catch (e) {
-    ElMessage.error('加载模型配置失败')
+    ElMessage.error(t('llm.messages.loadFailed'))
   } finally {
     loadingConfigs.value = false
   }
@@ -490,15 +491,19 @@ const addProvider = () => {
 const deleteProvider = async (provider) => {
   if (typeof provider.id === 'number' && !provider._isNew) {
     try {
-      await ElMessageBox.confirm('确定删除该模型配置？', '删除确认', { type: 'warning' })
+      await ElMessageBox.confirm(
+        t('llm.messages.confirmDelete'),
+        t('llm.messages.deleteTitle'),
+        { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') }
+      )
     } catch {
       return
     }
     try {
       await deleteLLMConfig(provider.id)
-      ElMessage.success('配置已删除')
+      ElMessage.success(t('llm.messages.configDeleted'))
     } catch (e) {
-      ElMessage.warning('服务端删除失败，已从列表移除')
+      ElMessage.warning(t('llm.messages.deleteFailed'))
     }
   }
   const idx = providers.findIndex(p => p.id === provider.id)
@@ -509,7 +514,7 @@ const deleteProvider = async (provider) => {
 
 const saveProvider = async (provider) => {
   if (!provider.name || !provider.base_url || !provider.api_key) {
-    ElMessage.warning('请填写供应商名称、Base URL 和密钥')
+    ElMessage.warning(t('llm.messages.needFields'))
     return
   }
   provider._saving = true
@@ -519,13 +524,13 @@ const saveProvider = async (provider) => {
       const data = await saveLLMConfig(payload)
       if (data?.id) provider.id = data.id
       provider._isNew = false
-      ElMessage.success('配置已创建')
+      ElMessage.success(t('llm.messages.configCreated'))
     } else {
       await updateLLMConfig(provider.id, payload)
-      ElMessage.success('配置已保存')
+      ElMessage.success(t('llm.messages.configSaved'))
     }
   } catch (e) {
-    ElMessage.error('保存失败，请检查后端服务')
+    ElMessage.error(t('llm.messages.saveFailed'))
   } finally {
     provider._saving = false
   }
@@ -533,7 +538,7 @@ const saveProvider = async (provider) => {
 
 const testProvider = async (provider) => {
   if (!provider.base_url || !provider.api_key) {
-    ElMessage.warning('请先填写 Base URL 和密钥')
+    ElMessage.warning(t('llm.messages.needKey'))
     return
   }
   provider._testing = true
@@ -543,13 +548,13 @@ const testProvider = async (provider) => {
     const data = await testLLMConfig(payload)
     provider._testResult = { ok: data?.ok ?? data?.success ?? true, msg: data?.message || '' }
     if (provider._testResult.ok) {
-      ElMessage.success('连接测试成功')
+      ElMessage.success(t('llm.messages.testSuccess'))
     } else {
-      ElMessage.error(provider._testResult.msg || '连接测试失败')
+      ElMessage.error(provider._testResult.msg || t('llm.messages.testFailed'))
     }
   } catch (e) {
-    provider._testResult = { ok: false, msg: e?.message || '连接失败' }
-    ElMessage.error('连接测试失败')
+    provider._testResult = { ok: false, msg: e?.message || t('llm.messages.testFailed') }
+    ElMessage.error(t('llm.messages.testFailed'))
   } finally {
     provider._testing = false
   }
@@ -591,7 +596,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 @use '@/styles/variables.scss' as *;
-
 .settings-root {
   display: flex;
   flex-direction: column;
@@ -1180,6 +1184,7 @@ onMounted(() => {
     line-height: 1.7;
     margin-top: 20px;
     max-width: 420px;
+    white-space: pre-line;
   }
 
   .about-links {
@@ -1189,7 +1194,6 @@ onMounted(() => {
   }
 }
 
-// 深色模式适配
 html.dark .settings-root {
   background: #252526;
 

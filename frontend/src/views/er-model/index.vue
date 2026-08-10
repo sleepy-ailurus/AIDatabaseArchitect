@@ -3,21 +3,21 @@
     <div class="editor-header" :class="{ collapsed: topHeaderCollapsed }">
       <div class="header-left">
         <el-breadcrumb separator="/" class="breadcrumb-sm">
-          <el-breadcrumb-item style="color: #94A3B8;">项目</el-breadcrumb-item>
-          <el-breadcrumb-item style="color: #94A3B8; cursor: pointer;" @click="goToProject">{{ projectName }}</el-breadcrumb-item>
+          <el-breadcrumb-item style="color: #94A3B8;">{{ t('erModel.breadcrumb.project') }}</el-breadcrumb-item>
+          <el-breadcrumb-item style="color: #94A3B8; cursor: pointer;" @click="goToProject">{{ tData('projectNames', projectName) }}</el-breadcrumb-item>
           <el-breadcrumb-item>
-            <span class="current-crumb">ER 模型编辑器</span>
+            <span class="current-crumb">{{ t('erModel.breadcrumb.erEditor') }}</span>
           </el-breadcrumb-item>
         </el-breadcrumb>
 
         <div class="header-stats">
           <div class="stat-pill">
             <el-icon :size="12"><Grid /></el-icon>
-            <span>{{ nodes.length }} 张表</span>
+            <span>{{ t('erModel.tablesCount', { count: nodes.length }) }}</span>
           </div>
           <div class="stat-pill">
             <el-icon :size="12"><Share /></el-icon>
-            <span>{{ edges.length }} 条关系</span>
+            <span>{{ t('erModel.relationsCount', { count: edges.length }) }}</span>
           </div>
         </div>
       </div>
@@ -26,7 +26,7 @@
         <div class="search-box">
           <el-input
             v-model="searchTable"
-            placeholder="搜索表名..."
+            :placeholder="t('erModel.searchTablePlaceholder')"
             size="small"
             clearable
             style="width: 160px;"
@@ -39,13 +39,13 @@
         <el-divider direction="vertical" />
 
         <el-button-group>
-          <el-tooltip content="自动布局" placement="bottom" popper-class="er-tip">
+          <el-tooltip :content="t('erModel.autoLayout')" placement="bottom" popper-class="er-tip">
             <el-button size="small" @click="autoLayout"><el-icon><SetUp /></el-icon></el-button>
           </el-tooltip>
-          <el-tooltip content="适配视图" placement="bottom" popper-class="er-tip">
+          <el-tooltip :content="t('erModel.fitView')" placement="bottom" popper-class="er-tip">
             <el-button size="small" @click="handleFitView"><el-icon><Aim /></el-icon></el-button>
           </el-tooltip>
-          <el-tooltip content="添加虚拟实体" placement="bottom" popper-class="er-tip">
+          <el-tooltip :content="t('erModel.addVirtual')" placement="bottom" popper-class="er-tip">
             <el-button size="small" @click="addVirtualNode"><el-icon><Plus /></el-icon></el-button>
           </el-tooltip>
         </el-button-group>
@@ -53,16 +53,16 @@
         <el-divider direction="vertical" />
 
         <el-button size="small" :icon="MagicStick" type="primary" plain @click="goToSuggestions">
-          AI 建议
+          {{ t('erModel.aiSuggest') }}
         </el-button>
         <el-button size="small" :icon="Download" @click="goToExport">
-          导出
+          {{ t('erModel.export') }}
         </el-button>
         <el-button size="small" :icon="Document" type="success" :loading="erModelStore.saving" @click="handleSave">
-          保存
+          {{ t('erModel.save') }}
         </el-button>
         <el-button size="small" :icon="Promotion" @click="handleSaveVersion">
-          存版本
+          {{ t('erModel.saveVersion') }}
         </el-button>
       </div>
     </div>
@@ -78,12 +78,12 @@
       <aside class="tables-sidebar" :class="{ collapsed: leftSidebarCollapsed }">
         <div class="sidebar-tabs">
           <div class="tab" :class="{ active: sidebarTab === 'tables' }" @click="sidebarTab = 'tables'">
-            <el-icon><Grid /></el-icon> 表列表
+            <el-icon><Grid /></el-icon> {{ t('erModel.tableList') }}
           </div>
         </div>
 
         <div class="sidebar-search">
-          <el-input v-model="sidebarSearchTable" placeholder="筛选表..." size="small" clearable>
+          <el-input v-model="sidebarSearchTable" :placeholder="t('erModel.filterTable')" size="small" clearable>
             <template #prefix><el-icon :size="14"><Search /></el-icon></template>
           </el-input>
         </div>
@@ -99,10 +99,10 @@
             <div class="table-dot"></div>
             <div class="table-info">
               <div class="table-name">{{ node.data.name }}</div>
-              <div class="table-sub">{{ node.data.columns?.length || 0 }} 字段 · {{ node.data.comment || '无注释' }}</div>
+              <div class="table-sub">{{ node.data.columns?.length || 0 }} {{ t('erModel.fields') }} · {{ node.data.comment || t('erModel.noComment') }}</div>
             </div>
           </div>
-          <el-empty v-if="filteredNodes.length === 0" description="暂无表" :image-size="60" />
+          <el-empty v-if="filteredNodes.length === 0" :description="t('erModel.noTables')" :image-size="60" />
         </el-scrollbar>
       </aside>
 
@@ -126,24 +126,24 @@
           <Background :gap="20" :size="1" pattern="dots" />
           <Controls :show-zoom="false" :show-fit-view="false" :show-interactive="false">
             <ControlButton @click="zoomIn">
-              <el-tooltip content="放大" placement="right" popper-class="er-tip">
+              <el-tooltip :content="t('erModel.zoomIn')" placement="right" popper-class="er-tip">
                 <el-icon><ZoomIn /></el-icon>
               </el-tooltip>
             </ControlButton>
             <ControlButton @click="zoomOut">
-              <el-tooltip content="缩小" placement="right" popper-class="er-tip">
+              <el-tooltip :content="t('erModel.zoomOut')" placement="right" popper-class="er-tip">
                 <el-icon><ZoomOut /></el-icon>
               </el-tooltip>
             </ControlButton>
             <ControlButton :class="{ 'is-active': mode === 'pointer' }" @click="setMode('pointer')">
-              <el-tooltip content="指针模式" placement="right" popper-class="er-tip">
+              <el-tooltip :content="t('erModel.pointerMode')" placement="right" popper-class="er-tip">
                 <svg class="mode-icon pointer-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M5.5 2.5L6 18l3-3 3 6 2-1-3-6 4 .5z" />
                 </svg>
               </el-tooltip>
             </ControlButton>
             <ControlButton :class="{ 'is-active': mode === 'hand' }" @click="setMode('hand')">
-              <el-tooltip content="手模式" placement="right" popper-class="er-tip">
+              <el-tooltip :content="t('erModel.handMode')" placement="right" popper-class="er-tip">
                 <svg class="mode-icon hand-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M18 11V6a2 2 0 00-2-2 2 2 0 00-2 2" />
                   <path d="M14 10V4a2 2 0 00-2-2 2 2 0 00-2 2" />
@@ -157,11 +157,11 @@
         </VueFlow>
 
         <div class="legend-bar">
-          <div class="legend-item"><span class="legend-dot confirmed"></span> 数据库关系</div>
-          <div class="legend-item"><span class="legend-dot ai"></span> AI 建议关系</div>
-          <div class="legend-item"><span class="legend-dot manual"></span> 手动关系</div>
-          <div class="legend-item"><span class="legend-key">🔑</span> 主键</div>
-          <div class="legend-item"><span class="legend-key">🔗</span> 外键</div>
+          <div class="legend-item"><span class="legend-dot confirmed"></span> {{ t('erModel.legend.confirmed') }}</div>
+          <div class="legend-item"><span class="legend-dot ai"></span> {{ t('erModel.legend.ai') }}</div>
+          <div class="legend-item"><span class="legend-dot manual"></span> {{ t('erModel.legend.manual') }}</div>
+          <div class="legend-item"><span class="legend-key">🔑</span> {{ t('erModel.legend.pk') }}</div>
+          <div class="legend-item"><span class="legend-key">🔗</span> {{ t('erModel.legend.fk') }}</div>
         </div>
       </main>
 
@@ -175,16 +175,16 @@
           </div>
           <div class="detail-sub">
             <el-tag size="small" effect="plain" type="primary">{{ selectedNode.data.engine || 'InnoDB' }}</el-tag>
-            <span style="color: #94A3B8; font-size: 12px;">{{ selectedNode.data.columns?.length || 0 }} 字段</span>
+            <span style="color: #94A3B8; font-size: 12px;">{{ t('erModel.detail.fieldCount', { count: selectedNode.data.columns?.length || 0 }) }}</span>
           </div>
           <p class="table-comment" v-if="selectedNode.data.comment">{{ selectedNode.data.comment }}</p>
         </div>
 
         <el-tabs v-model="detailTab" class="detail-tabs">
-          <el-tab-pane label="字段" name="columns">
+          <el-tab-pane :label="t('erModel.detail.fields')" name="columns">
             <div style="padding: 12px 16px 0;">
               <el-button type="primary" size="small" :icon="Plus" @click="startAddColumn">
-                添加字段
+                {{ t('erModel.detail.addField') }}
               </el-button>
             </div>
             <div class="column-list">
@@ -200,21 +200,21 @@
                 </div>
                 <div class="col-d-meta">
                   <el-tag v-if="!c.nullable" size="small" type="danger" effect="plain" round>NOT NULL</el-tag>
-                  <span v-else style="font-size: 11px; color: #94A3B8;">可空</span>
-                  <span v-if="c.default" class="col-d-default">默认: {{ c.default }}</span>
+                  <span v-else style="font-size: 11px; color: #94A3B8;">{{ t('erModel.detail.nullable') }}</span>
+                  <span v-if="c.default" class="col-d-default">{{ t('erModel.detail.defaultValue') }}: {{ c.default }}</span>
                 </div>
                 <div class="col-d-comment" v-if="c.comment">{{ c.comment }}</div>
 
                 <div class="col-d-edit">
                   <el-button text size="small" type="primary" @click="editColumn(idx)">
-                    <el-icon><Edit /></el-icon> 编辑
+                    <el-icon><Edit /></el-icon> {{ t('erModel.detail.editField') }}
                   </el-button>
                 </div>
               </div>
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="关系" name="relations">
+          <el-tab-pane :label="t('erModel.detail.relations')" name="relations">
             <div class="rel-list">
               <div v-for="r in nodeRelations" :key="r.id" class="rel-card" :class="r.data?.sourceType">
                 <div class="rel-head">
@@ -225,7 +225,7 @@
                     :class="getConfidenceClass(r.data.confidence)"
                     effect="light"
                   >
-                    置信度 {{ (r.data.confidence * 100).toFixed(0) }}%
+                    {{ t('erModel.detail.confidence') }} {{ (r.data.confidence * 100).toFixed(0) }}%
                   </el-tag>
                 </div>
                 <div class="rel-cols">
@@ -234,22 +234,22 @@
                   <code>{{ r.source === selectedNode.id ? getTargetName(r.target) : getSourceName(r.source) }}</code>
                 </div>
                 <div class="rel-tag-row" v-if="r.data?.sourceType === 'ai_suggestion' || r.data?.sourceType === 'ai'">
-                  <el-tag size="small" type="warning" effect="light"><el-icon><MagicStick /></el-icon> AI 推断</el-tag>
+                  <el-tag size="small" type="warning" effect="light"><el-icon><MagicStick /></el-icon> {{ t('erModel.detail.aiInferred') }}</el-tag>
                 </div>
                 <div class="rel-tag-row" v-else-if="r.data?.sourceType === 'manual'">
-                  <el-tag size="small" type="success" effect="light">手动创建</el-tag>
+                  <el-tag size="small" type="success" effect="light">{{ t('erModel.detail.manualCreated') }}</el-tag>
                 </div>
               </div>
-              <el-empty v-if="nodeRelations.length === 0" description="该表暂无关系" :image-size="60" />
+              <el-empty v-if="nodeRelations.length === 0" :description="t('erModel.detail.noRelations')" :image-size="60" />
             </div>
           </el-tab-pane>
         </el-tabs>
       </aside>
 
-      <aside class="edge-sidebar" v-else-if="selectedEdge">
+      <aside class="edge-sidebar" v-else-if="selectedEdge" :style="{ width: edgeSidebarWidth }">
         <div class="detail-header">
           <div class="detail-title-row">
-            <h3 class="detail-title">关系详情</h3>
+            <h3 class="detail-title">{{ t('erModel.detail.relationDetail') }}</h3>
             <el-button text circle size="small" @click="selectedEdgeId = null">
               <el-icon><Close /></el-icon>
             </el-button>
@@ -262,76 +262,76 @@
         </div>
 
         <div class="edge-detail-body">
-          <el-form label-width="90px" size="small">
-            <el-form-item label="基数">
+          <el-form :label-width="edgeLabelWidth" size="small">
+            <el-form-item :label="t('erModel.detail.cardinality')">
               <el-select v-model="selectedEdge.data.cardinality" style="width: 100%;">
-                <el-option label="一对一 (1:1)" value="1:1" />
-                <el-option label="一对多 (1:N)" value="1:N" />
-                <el-option label="多对多 (N:N)" value="N:N" />
+                <el-option :label="t('erModel.cardinalityOptions.oneToOne')" value="1:1" />
+                <el-option :label="t('erModel.cardinalityOptions.oneToMany')" value="1:N" />
+                <el-option :label="t('erModel.cardinalityOptions.manyToMany')" value="N:N" />
               </el-select>
             </el-form-item>
-            <el-form-item label="来源">
+            <el-form-item :label="t('erModel.detail.source')">
               <el-tag size="small" :type="getSourceTagType(selectedEdge.data.sourceType)">
-                {{ getSourceLabel(selectedEdge.data.sourceType) }}
+                {{ t(`erModel.sourceTypes.${selectedEdge.data.sourceType}`) || selectedEdge.data.sourceType }}
               </el-tag>
             </el-form-item>
-            <el-form-item label="源字段">
+            <el-form-item :label="t('erModel.detail.fromColumn')">
               <code>{{ selectedEdge.data.fromColumn || '-' }}</code>
             </el-form-item>
-            <el-form-item label="目标字段">
+            <el-form-item :label="t('erModel.detail.toColumn')">
               <code>{{ selectedEdge.data.toColumn || '-' }}</code>
             </el-form-item>
-            <el-form-item v-if="selectedEdge.data.reason && selectedEdge.data.reason.length" label="推断依据">
+            <el-form-item v-if="selectedEdge.data.reason && selectedEdge.data.reason.length" :label="t('erModel.detail.reason')">
               <div class="reason-list">
                 <div v-for="(r, i) in selectedEdge.data.reason" :key="i" class="reason-item">
                   <el-icon color="#10B981"><CircleCheckFilled /></el-icon>
-                  <span>{{ r }}</span>
+                  <span>{{ tData('reasons', r) }}</span>
                 </div>
               </div>
             </el-form-item>
           </el-form>
 
           <el-button type="danger" plain :icon="Delete" style="width: 100%;" @click="deleteEdge(selectedEdge.id)">
-            删除该关系
+            {{ t('erModel.detail.deleteRelation') }}
           </el-button>
         </div>
       </aside>
     </div>
 
-    <el-dialog v-model="showEditColumn" title="编辑字段" width="480px">
+    <el-dialog v-model="showEditColumn" :title="t('erModel.dialogs.editField')" width="480px">
       <el-form :model="editColForm" label-width="90px" v-if="editColForm">
-        <el-form-item label="字段名">
+        <el-form-item :label="t('erModel.dialogs.fieldName')">
           <el-input v-model="editColForm.name" />
         </el-form-item>
-        <el-form-item label="类型">
+        <el-form-item :label="t('erModel.dialogs.type')">
           <el-input v-model="editColForm.type" />
         </el-form-item>
-        <el-form-item label="主键">
+        <el-form-item :label="t('erModel.dialogs.primaryKey')">
           <el-switch v-model="editColForm.isPK" />
         </el-form-item>
-        <el-form-item label="唯一">
+        <el-form-item :label="t('erModel.dialogs.unique')">
           <el-switch v-model="editColForm.isUnique" />
         </el-form-item>
-        <el-form-item label="可空">
+        <el-form-item :label="t('erModel.dialogs.nullable')">
           <el-switch v-model="editColForm.nullable" />
         </el-form-item>
-        <el-form-item label="注释">
+        <el-form-item :label="t('erModel.dialogs.comment')">
           <el-input v-model="editColForm.comment" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showEditColumn = false">取消</el-button>
-        <el-button type="primary" @click="saveColumnEdit">保存</el-button>
+        <el-button @click="showEditColumn = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveColumnEdit">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showAddColumn" title="添加字段" width="480px">
+    <el-dialog v-model="showAddColumn" :title="t('erModel.dialogs.addField')" width="480px">
       <el-form :model="addColForm" label-width="90px">
-        <el-form-item label="字段名">
-          <el-input v-model="addColForm.name" placeholder="例如：created_at" />
+        <el-form-item :label="t('erModel.dialogs.fieldName')">
+          <el-input v-model="addColForm.name" :placeholder="t('erModel.dialogs.fieldNamePlaceholder')" />
         </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="addColForm.type" placeholder="选择或输入类型" filterable allow-create style="width: 100%;">
+        <el-form-item :label="t('erModel.dialogs.type')">
+          <el-select v-model="addColForm.type" :placeholder="t('erModel.dialogs.typePlaceholder')" filterable allow-create style="width: 100%;">
             <el-option label="INT" value="INT" />
             <el-option label="INTEGER" value="INTEGER" />
             <el-option label="BIGINT" value="BIGINT" />
@@ -349,82 +349,82 @@
             <el-option label="JSON" value="JSON" />
           </el-select>
         </el-form-item>
-        <el-form-item label="主键">
+        <el-form-item :label="t('erModel.dialogs.primaryKey')">
           <el-switch v-model="addColForm.isPK" />
         </el-form-item>
-        <el-form-item label="唯一">
+        <el-form-item :label="t('erModel.dialogs.unique')">
           <el-switch v-model="addColForm.isUnique" />
         </el-form-item>
-        <el-form-item label="可空">
+        <el-form-item :label="t('erModel.dialogs.nullable')">
           <el-switch v-model="addColForm.nullable" />
         </el-form-item>
-        <el-form-item label="默认值">
-          <el-input v-model="addColForm.default" placeholder="可选" />
+        <el-form-item :label="t('erModel.dialogs.defaultValue')">
+          <el-input v-model="addColForm.default" :placeholder="t('common.optional')" />
         </el-form-item>
-        <el-form-item label="注释">
+        <el-form-item :label="t('erModel.dialogs.comment')">
           <el-input v-model="addColForm.comment" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showAddColumn = false">取消</el-button>
-        <el-button type="primary" @click="saveNewColumn">保存</el-button>
+        <el-button @click="showAddColumn = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveNewColumn">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showVersionDialog" title="保存版本" width="440px">
+    <el-dialog v-model="showVersionDialog" :title="t('erModel.dialogs.saveVersion')" width="440px">
       <el-form :model="versionForm" label-width="80px">
-        <el-form-item label="版本备注">
-          <el-input v-model="versionForm.note" type="textarea" :rows="3" placeholder="描述本次版本变更..." />
+        <el-form-item :label="t('erModel.dialogs.versionNote')">
+          <el-input v-model="versionForm.note" type="textarea" :rows="3" :placeholder="t('erModel.dialogs.versionNotePlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showVersionDialog = false">取消</el-button>
-        <el-button type="primary" :loading="savingVersion" @click="confirmSaveVersion">保存版本</el-button>
+        <el-button @click="showVersionDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="savingVersion" @click="confirmSaveVersion">{{ t('erModel.dialogs.saveVersion') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showVirtualDialog" title="添加虚拟实体" width="440px">
+    <el-dialog v-model="showVirtualDialog" :title="t('erModel.dialogs.addVirtual')" width="440px">
       <el-form :model="virtualForm" label-width="80px">
-        <el-form-item label="实体名">
-          <el-input v-model="virtualForm.name" placeholder="例如：external_api" />
+        <el-form-item :label="t('erModel.dialogs.entityName')">
+          <el-input v-model="virtualForm.name" :placeholder="t('erModel.dialogs.entityNamePlaceholder')" />
         </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="virtualForm.comment" type="textarea" :rows="2" placeholder="该实体的用途说明..." />
+        <el-form-item :label="t('erModel.dialogs.remark')">
+          <el-input v-model="virtualForm.comment" type="textarea" :rows="2" :placeholder="t('erModel.dialogs.entityRemarkPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showVirtualDialog = false">取消</el-button>
-        <el-button type="primary" @click="confirmAddVirtual">添加</el-button>
+        <el-button @click="showVirtualDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmAddVirtual">{{ t('common.add') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showCardinalityDialog" title="选择关系基数" width="360px" :close-on-click-modal="false">
+    <el-dialog v-model="showCardinalityDialog" :title="t('erModel.dialogs.selectCardinality')" width="360px" :close-on-click-modal="false">
       <p style="font-size: 13px; color: #64748B; margin: 0 0 16px;">
-        正在连接表 <strong>{{ getSourceName(pendingConnection?.source) }}</strong> → <strong>{{ getTargetName(pendingConnection?.target) }}</strong>
+        {{ t('erModel.dialogs.connectingTables', { source: getSourceName(pendingConnection?.source), target: getTargetName(pendingConnection?.target) }) }}
       </p>
-      <el-radio-group v-model="pendingCardinality" style="display: flex; flex-direction: column; gap: 10px;">
+      <el-radio-group v-model="pendingCardinality" style="display: flex; flex-direction: column; gap: 10px; align-items: stretch;">
         <el-radio value="1:1" class="cardinality-opt">
-          <div>
-            <div class="cardinality-label">一对一 (1:1)</div>
-            <div class="cardinality-desc">一个源表记录对应一个目标表记录</div>
+          <div class="cardinality-text">
+            <div class="cardinality-label">{{ t('erModel.cardinalityOptions.oneToOne') }}</div>
+            <div class="cardinality-desc">{{ t('erModel.dialogs.oneToOneDesc') }}</div>
           </div>
         </el-radio>
         <el-radio value="1:N" class="cardinality-opt">
-          <div>
-            <div class="cardinality-label">一对多 (1:N)</div>
-            <div class="cardinality-desc">一个源表记录对应多个目标表记录</div>
+          <div class="cardinality-text">
+            <div class="cardinality-label">{{ t('erModel.cardinalityOptions.oneToMany') }}</div>
+            <div class="cardinality-desc">{{ t('erModel.dialogs.oneToManyDesc') }}</div>
           </div>
         </el-radio>
         <el-radio value="N:N" class="cardinality-opt">
-          <div>
-            <div class="cardinality-label">多对多 (N:N)</div>
-            <div class="cardinality-desc">双方记录互相可以对应多条</div>
+          <div class="cardinality-text">
+            <div class="cardinality-label">{{ t('erModel.cardinalityOptions.manyToMany') }}</div>
+            <div class="cardinality-desc">{{ t('erModel.dialogs.manyToManyDesc') }}</div>
           </div>
         </el-radio>
       </el-radio-group>
       <template #footer>
-        <el-button @click="cancelTableConnection">取消</el-button>
-        <el-button type="primary" @click="confirmTableConnection">创建关系</el-button>
+        <el-button @click="cancelTableConnection">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmTableConnection">{{ t('erModel.dialogs.createRelation') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -433,6 +433,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, markRaw, provide, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import dagre from 'dagre'
@@ -450,7 +451,12 @@ import { useErModelStore } from '@/stores/erModel'
 import { useProjectStore } from '@/stores/project'
 import { getTables } from '@/api/schema'
 import { getRelationships, createRelationship, deleteRelationship } from '@/api/relationship'
+import { useDataI18n } from '@/i18n'
 
+const { t, locale } = useI18n()
+const { tData } = useDataI18n()
+const edgeLabelWidth = computed(() => (locale.value === 'en-US' ? '95px' : '70px'))
+const edgeSidebarWidth = computed(() => (locale.value === 'en-US' ? '380px' : '320px'))
 const route = useRoute()
 const router = useRouter()
 const erModelStore = useErModelStore()
@@ -537,7 +543,7 @@ const onSearchEnter = () => {
   if (!q) return
   const matches = nodes.value.filter(n => (n.data.name || '').toLowerCase().includes(q.toLowerCase()))
   if (matches.length === 0) {
-    ElMessage.warning('未找到匹配的表')
+    ElMessage.warning(t('erModel.messages.tableNotFound'))
     return
   }
   searchMatches.value = matches
@@ -600,18 +606,6 @@ const getSourceTagType = (t) => {
   return map[t] || 'info'
 }
 
-const getSourceLabel = (t) => {
-  const map = {
-    database: '数据库外键',
-    database_constraint: '数据库约束',
-    ai: 'AI 推断',
-    ai_suggestion: 'AI 建议',
-    ai_confirmed: 'AI 已确认',
-    manual: '手动创建'
-  }
-  return map[t] || t || '未知'
-}
-
 const selectNode = (node) => {
   selectedNodeId.value = node.id
   selectedEdgeId.value = null
@@ -635,7 +629,7 @@ const onPaneClick = () => {
 const onConnect = async (connection) => {
   // Prevent self-loop connections
   if (connection.source === connection.target) {
-    ElMessage.warning('不能连接到自身节点')
+    ElMessage.warning(t('erModel.messages.cannotConnectSelf'))
     return
   }
 
@@ -680,7 +674,7 @@ const onConnect = async (connection) => {
       source_type: 'manual'
     })
     if (data?.id) newEdge.id = String(data.id)
-    ElMessage.success('关系已创建')
+    ElMessage.success(t('erModel.messages.relationCreated'))
   } catch {
     // keep local edge even if API fails
   }
@@ -719,7 +713,7 @@ const confirmTableConnection = async () => {
       source_type: 'manual'
     })
     if (data?.id) newEdge.id = String(data.id)
-    ElMessage.success(`关系已创建 (${cardinality})`)
+    ElMessage.success(t('erModel.messages.relationCreatedWithCardinality', { cardinality }))
   } catch {
     // keep local edge even if API fails
   }
@@ -748,7 +742,7 @@ const copyNode = (nodeId) => {
   newNode.data.name = `${node.data.name}_copy`
   nodes.value.push(newNode)
   erModelStore.addNode(newNode)
-  ElMessage.success('表已复制')
+  ElMessage.success(t('erModel.messages.tableDuplicated'))
 }
 
 const deleteNode = (nodeId) => {
@@ -763,13 +757,13 @@ const deleteNode = (nodeId) => {
     selectedNodeId.value = null
   }
 
-  ElMessage.success('表已删除')
+  ElMessage.success(t('erModel.messages.tableDeleted'))
 }
 
 const deleteEdge = async (id) => {
   try {
     await deleteRelationship(id)
-    ElMessage.success('关系已删除')
+    ElMessage.success(t('erModel.messages.relationDeleted'))
   } catch {
     // ignore
   }
@@ -821,11 +815,11 @@ provide('nodeActions', {
 
 const saveNewColumn = () => {
   if (!addColForm.name.trim()) {
-    ElMessage.warning('请输入字段名')
+    ElMessage.warning(t('erModel.messages.enterFieldName'))
     return
   }
   if (!addColForm.type.trim()) {
-    ElMessage.warning('请输入字段类型')
+    ElMessage.warning(t('erModel.messages.enterFieldType'))
     return
   }
   const target = nodes.value.find(n => String(n.id) === String(addColTargetNodeId.value))
@@ -845,7 +839,7 @@ const saveNewColumn = () => {
     aiSuggested: false
   })
   showAddColumn.value = false
-  ElMessage.success('字段已添加（请点击保存按钮持久化）')
+  ElMessage.success(t('erModel.messages.fieldAdded'))
 }
 
 const saveColumnEdit = () => {
@@ -854,7 +848,7 @@ const saveColumnEdit = () => {
     selectedNode.value.data.columns[idx] = { ...editColForm.value }
   }
   showEditColumn.value = false
-  ElMessage.success('字段已更新（请点击保存按钮持久化）')
+  ElMessage.success(t('erModel.messages.fieldUpdated'))
 }
 
 const handleFitView = () => {
@@ -934,7 +928,7 @@ const autoLayout = () => {
     }
   })
 
-  ElMessage.success('已自动布局')
+  ElMessage.success(t('erModel.messages.autoLayoutDone'))
   handleFitView()
 }
 
@@ -946,7 +940,7 @@ const addVirtualNode = () => {
 
 const confirmAddVirtual = () => {
   if (!virtualForm.name) {
-    ElMessage.warning('请输入实体名')
+    ElMessage.warning(t('erModel.messages.enterEntityName'))
     return
   }
   const id = `virtual-${Date.now()}`
@@ -956,17 +950,17 @@ const confirmAddVirtual = () => {
     position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
     data: {
       name: virtualForm.name,
-      comment: virtualForm.comment || '虚拟实体',
+      comment: virtualForm.comment || t('erModel.defaults.virtualEntity'),
       engine: 'VIRTUAL',
       columns: [
-        { name: 'id', type: 'BIGINT', isPK: true, nullable: false, comment: '虚拟主键' }
+        { name: 'id', type: 'BIGINT', isPK: true, nullable: false, comment: t('erModel.defaults.virtualPK') }
       ]
     }
   }
   nodes.value.push(node)
   erModelStore.addNode(node)
   showVirtualDialog.value = false
-  ElMessage.success('虚拟实体已添加')
+  ElMessage.success(t('erModel.messages.virtualAdded'))
 }
 
 const handleSave = async () => {
@@ -974,7 +968,7 @@ const handleSave = async () => {
   erModelStore.edges = edges.value
   try {
     await erModelStore.saveModel(projectId)
-    ElMessage.success('ER 模型已保存')
+    ElMessage.success(t('erModel.messages.modelSaved'))
   } catch {
     // handled by interceptor
   }
@@ -991,7 +985,7 @@ const confirmSaveVersion = async () => {
   erModelStore.edges = edges.value
   try {
     await erModelStore.saveVersion(projectId, versionForm.note)
-    ElMessage.success('版本已保存')
+    ElMessage.success(t('erModel.messages.versionSaved'))
     showVersionDialog.value = false
   } catch {
     // handled by interceptor
@@ -1693,30 +1687,79 @@ onMounted(() => {
 
   .reason-item {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 6px;
     font-size: 12px;
     color: $text-regular;
     line-height: 1.5;
+    flex-wrap: nowrap;
+
+    span {
+      white-space: nowrap;
+    }
   }
 }
 
 .cardinality-opt {
+  width: 100%;
+  box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid $border-light;
   border-radius: $radius-md;
   transition: all 0.2s;
   cursor: pointer;
+  display: flex;
   align-items: center;
-
-  :deep(.el-radio__inner) {
-    border-color: #64748B;
-  }
+  overflow: visible;
+  height: auto;
+  min-height: 0;
 
   :deep(.el-radio) {
     display: flex;
-    align-items: flex-start;
-    padding-top: 2px;
+    align-items: center;
+    padding-top: 0;
+    margin-right: 0;
+    width: 100%;
+    overflow: visible;
+    height: auto;
+    min-height: 0;
+  }
+
+  :deep(.el-radio__input) {
+    padding-top: 0;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+
+  :deep(.el-radio__label) {
+    flex: 1;
+    min-width: 0;
+    padding-left: 0;
+    overflow: visible;
+  }
+
+  :deep(.el-radio__inner) {
+    border-color: #64748B;
+    width: 14px;
+    height: 14px;
+  }
+
+  :deep(.el-radio__original:checked + .el-radio__inner) {
+    width: 14px;
+    height: 14px;
+  }
+
+  :deep(.el-radio__inner::after) {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background-color: #fff;
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.15s ease-in;
   }
 
   &:hover {
@@ -1724,16 +1767,28 @@ onMounted(() => {
     background: rgba(59, 130, 246, 0.03);
   }
 
+  .cardinality-text {
+    min-width: 0;
+    white-space: normal;
+  }
+
   .cardinality-label {
     font-size: 13px;
     font-weight: 600;
     color: $text-primary;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .cardinality-desc {
     font-size: 11px;
     color: $text-secondary;
     margin-top: 2px;
+    line-height: 1.3;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 }
 

@@ -6,6 +6,7 @@ import 'element-plus/theme-chalk/dark/css-vars.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import router from './router'
+import i18n from './i18n'
 import './styles/global.scss'
 import { useSettingsStore } from './stores/settings'
 
@@ -18,9 +19,9 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 const pinia = createPinia()
 app.use(pinia)
 app.use(router)
+app.use(i18n)
 app.use(ElementPlus)
 
-// 初始化主题、语言等全局配置
 const settingsStore = useSettingsStore(pinia)
 settingsStore.init()
 

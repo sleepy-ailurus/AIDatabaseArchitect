@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const STORAGE_KEY = 'aidb_settings'
 
 export const useSettingsStore = defineStore('settings', () => {
-  const theme = ref('light')
+  const theme = ref('auto')
   const language = ref('zh-CN')
   const systemDark = ref(false)
 

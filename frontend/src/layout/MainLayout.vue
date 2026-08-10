@@ -7,8 +7,8 @@
         </div>
         <transition name="fade">
           <div v-if="!isCollapsed" class="logo-text">
-            <div class="logo-title">AI DB Architect</div>
-            <div class="logo-subtitle">数据库智能分析</div>
+            <div class="logo-title">{{ t('app.title') }}</div>
+            <div class="logo-subtitle">{{ t('app.subtitle') }}</div>
           </div>
         </transition>
       </div>
@@ -27,7 +27,7 @@
           <template v-for="route in menuRoutes" :key="route.path">
             <el-menu-item :index="resolvePath(route.path)">
               <el-icon><component :is="route.meta.icon" /></el-icon>
-              <template #title>{{ route.meta.title }}</template>
+              <template #title>{{ t(route.meta.title) }}</template>
             </el-menu-item>
           </template>
         </el-menu>
@@ -37,7 +37,7 @@
         <div class="settings-btn" :class="{ collapsed: isCollapsed }" @click="showSettings = true">
           <el-icon :size="20"><Setting /></el-icon>
           <transition name="fade">
-            <span v-if="!isCollapsed" class="settings-label">设置</span>
+            <span v-if="!isCollapsed" class="settings-label">{{ t('app.settings') }}</span>
           </transition>
         </div>
       </div>
@@ -59,7 +59,7 @@
         <div class="header-center">
           <div class="search-box">
             <el-icon :size="14" color="#94A3B8"><Search /></el-icon>
-            <input type="text" placeholder="搜索项目、数据库、表..." class="search-input" />
+            <input type="text" :placeholder="t('app.searchPlaceholder')" class="search-input" />
             <kbd class="shortcut-hint">Ctrl+K</kbd>
           </div>
         </div>
@@ -92,9 +92,11 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import SettingsDialog from '@/components/SettingsDialog.vue'
 import { useSettingsStore } from '@/stores/settings'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const settingsStore = useSettingsStore()
@@ -117,7 +119,10 @@ const activeMenu = computed(() => {
 })
 
 const currentPageTitle = computed(() => {
-  return route.meta?.title || 'AI DB Architect'
+  if (route.meta?.title) {
+    return t(route.meta.title)
+  }
+  return t('app.title')
 })
 
 const resolvePath = (path) => {
