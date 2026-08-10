@@ -17,27 +17,9 @@
       </div>
 
       <div class="header-actions">
-        <el-radio-group v-model="previewFormat" @change="onFormatChange">
-          <el-radio-button value="markdown">Markdown</el-radio-button>
-          <el-radio-button value="html">HTML</el-radio-button>
-          <el-radio-button value="pdf" disabled>
-            PDF <el-tag size="small" type="info" style="margin-left: 4px;">即将支持</el-tag>
-          </el-radio-button>
-        </el-radio-group>
-
-        <el-divider direction="vertical" />
-
-        <el-dropdown trigger="click" @command="onDownload">
-          <el-button type="primary" :icon="Download" :loading="downloading">
-            下载文档 <el-icon style="margin-left: 2px;"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="markdown"><el-icon><Document /></el-icon> Markdown (.md)</el-dropdown-item>
-              <el-dropdown-item command="html"><el-icon><Monitor /></el-icon> HTML 单页 (.html)</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <el-button type="primary" :icon="Download" :loading="downloading" @click="onDownload">
+          下载 Markdown
+        </el-button>
 
         <el-button :icon="Refresh" :loading="loading" @click="loadPreview">刷新预览</el-button>
       </div>
@@ -79,9 +61,6 @@
         <div class="toc-foot">
           <div class="doc-stats">
             <div class="stat-row">
-              <span>文档大小</span><strong>{{ docStats.size || '-' }}</strong>
-            </div>
-            <div class="stat-row">
               <span>表数量</span><strong>{{ docStats.table_count || 0 }}</strong>
             </div>
             <div class="stat-row">
@@ -96,8 +75,7 @@
 
       <main class="doc-preview">
         <el-scrollbar ref="docScroll">
-          <div class="md-content" v-if="previewHtml" v-html="previewHtml"></div>
-          <div class="md-content" v-else-if="previewText">
+          <div class="md-content" v-if="previewText">
             <pre class="raw-md">{{ previewText }}</pre>
           </div>
           <el-empty v-else-if="!loading" description="暂无文档预览，请点击刷新预览生成">
@@ -109,12 +87,6 @@
 
     <el-dialog v-model="showConfig" title="生成内容配置" width="480px">
       <el-form label-width="120px">
-        <el-form-item label="文档格式">
-          <el-radio-group v-model="config.format">
-            <el-radio value="markdown">Markdown</el-radio>
-            <el-radio value="html">HTML</el-radio>
-          </el-radio-group>
-        </el-form-item>
         <el-form-item label="包含章节">
           <el-checkbox-group v-model="config.sections">
             <el-checkbox value="overview">数据库概述</el-checkbox>
@@ -122,7 +94,6 @@
             <el-checkbox value="tables">表结构说明</el-checkbox>
             <el-checkbox value="relations">关系与索引</el-checkbox>
             <el-checkbox value="ai_relations">AI 推断说明</el-checkbox>
-            <el-checkbox value="quality">质量建议</el-checkbox>
             <el-checkbox value="version">版本记录</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
@@ -151,14 +122,12 @@ import { exportDocument, previewDocument, getExport } from '@/api/export'
 const route = useRoute()
 const projectId = computed(() => route.params.id)
 
-const previewFormat = ref('markdown')
 const currentSection = ref(1)
 const docScroll = ref()
 const loading = ref(false)
 const downloading = ref(false)
 const showConfig = ref(false)
 const previewText = ref('')
-const previewHtml = ref('')
 
 const docMeta = reactive({
   project_name: '',
@@ -178,8 +147,7 @@ const docStats = reactive({
 })
 
 const config = reactive({
-  format: 'markdown',
-  sections: ['overview', 'er_diagram', 'tables', 'relations', 'ai_relations', 'quality', 'version'],
+  sections: ['overview', 'er_diagram', 'tables', 'relations', 'ai_relations', 'version'],
   include_ai: true,
   expand_columns: true
 })
@@ -206,9 +174,6 @@ const tocData = computed(() => {
   if (sections.includes('ai_relations') && config.include_ai) {
     result.push({ id: 'ai_relations', num: String(num++), label: 'AI 推断说明', count: `${docStats.ai_relation_count} 条` })
   }
-  if (sections.includes('quality')) {
-    result.push({ id: 'quality', num: String(num++), label: '数据库质量建议' })
-  }
   if (sections.includes('version')) {
     result.push({ id: 'version', num: String(num++), label: '附录：版本记录' })
   }
@@ -223,20 +188,12 @@ const formatTime = (t) => {
 const renderPreview = (data) => {
   if (!data) {
     previewText.value = ''
-    previewHtml.value = ''
     return
   }
   const content = typeof data === 'string' ? data
-    : data.content || data.markdown || data.html || data.text || ''
-  const fmt = data.format || config.format
-
-  if (fmt === 'html' || (typeof content === 'string' && content.trim().startsWith('<'))) {
-    previewHtml.value = content
-    previewText.value = ''
-  } else {
-    previewText.value = content
-    previewHtml.value = ''
-  }
+    : data.content || data.markdown || data.text || ''
+  // PDF and Markdown both preview as raw Markdown text
+  previewText.value = content
 
   const meta = data.meta || data.metadata || {}
   Object.assign(docMeta, {
@@ -261,7 +218,7 @@ const loadPreview = async () => {
   loading.value = true
   try {
     const payload = {
-      format: previewFormat.value,
+      format: 'markdown',
       sections: config.sections,
       include_ai: config.include_ai,
       expand_columns: config.expand_columns
@@ -271,39 +228,33 @@ const loadPreview = async () => {
   } catch (e) {
     ElMessage.error('生成预览失败，请检查后端服务')
     previewText.value = ''
-    previewHtml.value = ''
   } finally {
     loading.value = false
   }
 }
 
-const onFormatChange = () => {
-  config.format = previewFormat.value
-  loadPreview()
-}
-
 const applyConfig = () => {
   showConfig.value = false
-  previewFormat.value = config.format
   loadPreview()
 }
 
-const onDownload = async (format) => {
+const onDownload = async () => {
   downloading.value = true
   try {
     const payload = {
-      format,
+      format: 'markdown',
       sections: config.sections,
       include_ai: config.include_ai,
       expand_columns: config.expand_columns
     }
-    const blob = await exportDocument(projectId.value, payload)
-    const ext = format === 'html' ? 'html' : 'md'
-    const filename = `${docMeta.project_name || 'database-design'}.${ext}`
-    const url = window.URL.createObjectURL(new Blob([blob]))
+    const filename = `${docMeta.project_name || 'database-design'}`
+
+    const data = await exportDocument(projectId.value, payload)
+    const content = typeof data === 'string' ? data : (data.content || data.markdown || '')
+    const url = window.URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url
-    link.download = filename
+    link.download = `${filename}.md`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

@@ -431,7 +431,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, markRaw, provide, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, markRaw, provide, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -452,6 +452,7 @@ import { useProjectStore } from '@/stores/project'
 import { getTables } from '@/api/schema'
 import { getRelationships, createRelationship, deleteRelationship } from '@/api/relationship'
 import { useDataI18n } from '@/i18n'
+import { registerShortcut, unregisterShortcut } from '@/utils/shortcuts'
 
 const { t, locale } = useI18n()
 const { tData } = useDataI18n()
@@ -666,8 +667,8 @@ const onConnect = async (connection) => {
   edges.value.push(newEdge)
   try {
     const data = await createRelationship(projectId, {
-      source_table: connection.source,
-      target_table: connection.target,
+      source_table: getSourceName(connection.source),
+      target_table: getSourceName(connection.target),
       source_column: newEdge.data.fromColumn,
       target_column: newEdge.data.toColumn,
       cardinality: '1:N',
@@ -705,8 +706,8 @@ const confirmTableConnection = async () => {
   erModelStore.addEdge(newEdge)
   try {
     const data = await createRelationship(projectId, {
-      source_table: connection.source,
-      target_table: connection.target,
+      source_table: getSourceName(connection.source),
+      target_table: getSourceName(connection.target),
       source_column: null,
       target_column: null,
       cardinality,
@@ -1152,6 +1153,16 @@ onMounted(() => {
   setMode(mode.value)
   loadProject()
   loadModel()
+
+  registerShortcut('Ctrl+s', handleSave)
+  registerShortcut('Ctrl+l', autoLayout)
+  registerShortcut('Ctrl+e', goToExport)
+})
+
+onBeforeUnmount(() => {
+  unregisterShortcut('Ctrl+s')
+  unregisterShortcut('Ctrl+l')
+  unregisterShortcut('Ctrl+e')
 })
 </script>
 

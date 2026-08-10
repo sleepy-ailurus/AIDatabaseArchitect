@@ -324,6 +324,11 @@ class AnalysisTaskOut(ORMModel):
 # ---------------------------------------------------------------------------
 class ExportCreate(BaseModel):
     format: str = "markdown"
+    sections: list[str] = [
+        "overview", "er_diagram", "tables", "relations", "ai_relations", "version"
+    ]
+    include_ai: bool = True
+    expand_columns: bool = True
 
 
 class ExportOut(ORMModel):

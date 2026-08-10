@@ -84,17 +84,19 @@
       align-center
       destroy-on-close
     >
-      <SettingsDialog />
+      <SettingsDialog @close="showSettings = false" />
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import SettingsDialog from '@/components/SettingsDialog.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { registerShortcut, unregisterShortcut } from '@/utils/shortcuts'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -103,6 +105,24 @@ const settingsStore = useSettingsStore()
 
 const isCollapsed = ref(false)
 const showSettings = ref(false)
+
+const handleNewProject = () => {
+  router.push('/projects')
+}
+
+const handleOpenSettings = () => {
+  showSettings.value = true
+}
+
+onMounted(() => {
+  registerShortcut('Ctrl+n', handleNewProject)
+  registerShortcut('Ctrl+,', handleOpenSettings)
+})
+
+onBeforeUnmount(() => {
+  unregisterShortcut('Ctrl+n')
+  unregisterShortcut('Ctrl+,')
+})
 
 const menuTextColor = computed(() => settingsStore.isDark ? '#94a3b8' : '#64748B')
 const menuActiveTextColor = computed(() => settingsStore.isDark ? '#60a5fa' : '#3B82F6')
