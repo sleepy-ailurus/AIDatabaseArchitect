@@ -24,10 +24,10 @@ from app.services.llm_service import LLMSettings, settings_from_config, test_llm
 router = APIRouter(prefix="/api", tags=["llm-configs"])
 
 _PROVIDER_DEFAULTS = {
-    "deepseek": "https://api.deepseek.com",
+    "openai": "https://api.openai.com/v1",
+    "ollama": "http://localhost:11434",
     "gemini": "https://generativelanguage.googleapis.com/v1beta",
     "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "openai": "https://api.openai.com/v1",
 }
 
 
@@ -43,9 +43,12 @@ def _to_out(cfg: LLMConfig) -> LLMConfigOut:
         max_tokens=cfg.max_tokens,
         timeout_seconds=cfg.timeout_seconds,
         max_retries=cfg.max_retries,
+        rate_limit=cfg.rate_limit,
+        rate_unlimited=cfg.rate_unlimited,
         usage=cfg.usage or [],
         usage_list=cfg.usage or [],
         is_default=cfg.is_default,
+        is_active=cfg.is_active,
         last_test_ok=cfg.last_test_ok,
         created_at=cfg.created_at,
         api_key_masked=crypto.mask(api_key_plain) if api_key_plain else None,
@@ -86,8 +89,11 @@ def create_config(payload: LLMConfigCreate, db: Session = Depends(get_db)):
         max_tokens=payload.max_tokens,
         timeout_seconds=payload.timeout_seconds,
         max_retries=payload.max_retries,
+        rate_limit=payload.rate_limit,
+        rate_unlimited=payload.rate_unlimited,
         usage=_normalize_usage(payload) or [],
         is_default=payload.is_default,
+        is_active=payload.is_active if payload.is_active is not None else True,
     )
     db.add(cfg)
     db.flush()
@@ -151,6 +157,7 @@ def test_config(payload: LLMTestRequest, db: Session = Depends(get_db)):
             base_url=payload.base_url,
             api_key=payload.api_key,
             model=payload.model,
+            endpoint_path=payload.endpoint_path or "/chat/completions",
             temperature=payload.temperature if payload.temperature is not None else 0.2,
             max_tokens=payload.max_tokens or 4096,
             timeout_seconds=payload.timeout_seconds or 60,

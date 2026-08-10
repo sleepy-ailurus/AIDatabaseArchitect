@@ -85,7 +85,7 @@
                   v-for="provider in providers"
                   :key="provider.id"
                   class="provider-card"
-                  :class="{ expanded: expandedId === provider.id }"
+                  :class="{ expanded: expandedId === provider.id, disabled: !provider.enabled }"
                 >
                   <div class="card-header" @click="toggleExpand(provider.id)">
                     <div class="card-header-left">
@@ -96,17 +96,18 @@
                         @change="activeProviderId = provider.id; selectProvider(provider)"
                         @click.stop
                       />
-                      <span class="provider-name">{{ provider.name || t('llm.provider.namePlaceholder') }}</span>
+                      <span class="provider-name">{{ provider.name }}</span>
                     </div>
                     <div class="card-header-right">
                       <el-switch
                         v-model="provider.enabled"
                         @click.stop
+                        @change="toggleEnabled(provider)"
                         class="mini-switch"
                       />
                       <el-icon
                         class="action-icon delete"
-                        @click.stop="deleteProvider(provider.id)"
+                        @click.stop="deleteProvider(provider)"
                       >
                         <Delete />
                       </el-icon>
@@ -141,7 +142,7 @@
                               :rows="4"
                               :placeholder="t('llm.provider.curlPlaceholder')"
                             />
-                            <el-button type="primary" size="small" @click="importFromCurl(provider)">{{ t('llm.provider.import') }}</el-button>
+                            <el-button type="primary" size="small" @click="parseCurl(provider)">{{ t('llm.provider.parseCurl') }}</el-button>
                           </div>
                         </el-collapse-item>
                       </el-collapse>
@@ -155,7 +156,7 @@
                           :key="p"
                           class="protocol-tab"
                           :class="{ active: provider.protocol === p }"
-                          @click="provider.protocol = p"
+                          @click="setProtocol(provider, p)"
                         >{{ p }}</div>
                       </div>
                     </div>
@@ -173,16 +174,33 @@
                             <div class="ref-endpoint">
                               <span class="ref-label">{{ t('llm.provider.endpoint') }}:</span>
                               <el-radio-group v-model="provider.endpoint_path" size="small">
-                                <el-radio-button value="/chat/completions">/chat/completions</el-radio-button>
-                                <el-radio-button value="/responses">/responses</el-radio-button>
+                                <template v-if="provider.protocol === 'Ollama'">
+                                  <el-radio-button value="/api/chat">/api/chat</el-radio-button>
+                                </template>
+                                <template v-else>
+                                  <el-radio-button value="/chat/completions">/chat/completions</el-radio-button>
+                                  <el-radio-button value="/responses">/responses</el-radio-button>
+                                </template>
                               </el-radio-group>
                             </div>
                             <div class="ref-url">
-                              <div class="ref-label">{{ t('llm.provider.baseUrl') }}</div>
-                              <el-input v-model="provider.base_url" />
-                              <div class="preset-tags">
+                              <div class="ref-label-row">
+                                <span class="ref-label">{{ t('llm.provider.baseUrl') }}</span>
+                                <el-button
+                                  v-if="provider.protocol === 'Ollama'"
+                                  size="small"
+                                  class="local-btn"
+                                  @click="provider.base_url = 'http://127.0.0.1:11434'"
+                                >本地</el-button>
+                              </div>
+                              <el-input v-model="provider.base_url" :placeholder="provider.protocol === 'Ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1'" />
+                              <div class="base-url-hint" v-if="provider.protocol === 'Ollama' && provider.base_url">
+                                <span>{{ t('llm.provider.fullUrl') }}：</span>
+                                <span class="full-url-value">{{ (provider.base_url.replace(/\/$/, '')) + provider.endpoint_path }}</span>
+                              </div>
+                              <div class="preset-tags" v-if="provider.protocol !== 'Ollama'">
                                 <span
-                                  v-for="tag in presetUrls"
+                                  v-for="tag in presetUrls.filter(t => t.label !== 'Ollama')"
                                   :key="tag.label"
                                   class="preset-tag"
                                   :class="{ active: provider.base_url === tag.value }"
@@ -199,17 +217,30 @@
                       <div class="field-label">{{ t('llm.provider.apiKey') }}</div>
                       <div class="key-input-wrap">
                         <el-input
+                          v-if="!provider._keyMasked"
                           v-model="provider.api_key"
-                          :type="showKeyMap[provider.id] ? 'text' : 'password'"
+                          type="password"
+                          show-password
+                          clearable
                           :placeholder="t('llm.provider.apiKey')"
+                          @input="onKeyInput(provider)"
                         />
-                        <el-icon
-                          class="key-toggle"
-                          @click="toggleKeyVisibility(provider.id)"
-                        >
-                          <View v-if="showKeyMap[provider.id]" />
-                          <Hide v-else />
-                        </el-icon>
+                        <div v-else class="key-masked-display">
+                          <span class="key-masked-text" :class="{ reveal: showKeyMap[provider.id] }">{{ provider.api_key }}</span>
+                          <el-icon
+                            class="key-toggle"
+                            @click="toggleKeyVisibility(provider.id)"
+                          >
+                            <View v-if="showKeyMap[provider.id]" />
+                            <Hide v-else />
+                          </el-icon>
+                          <el-icon
+                            class="key-clear"
+                            @click="clearKey(provider)"
+                          >
+                            <Close />
+                          </el-icon>
+                        </div>
                       </div>
                     </div>
 
@@ -346,6 +377,37 @@
     <div class="settings-footer">
       <el-button @click="$emit('close')">{{ t('settings.buttons.close') }}</el-button>
     </div>
+
+    <el-dialog
+      v-model="curlDialogVisible"
+      :title="t('llm.provider.parseSuccess')"
+      width="480px"
+      :close-on-click-modal="true"
+      append-to-body
+    >
+      <div class="curl-preview" v-if="curlPreview">
+        <div class="curl-preview-row">
+          <span class="curl-label">{{ t('llm.provider.protocol') }}:</span>
+          <span class="curl-value">{{ curlPreview.protocol }}</span>
+        </div>
+        <div class="curl-preview-row">
+          <span class="curl-label">{{ t('llm.provider.baseUrl') }}:</span>
+          <span class="curl-value curl-value-break">{{ curlPreview.base_url }}</span>
+        </div>
+        <div class="curl-preview-row">
+          <span class="curl-label">{{ t('llm.provider.endpoint') }}:</span>
+          <span class="curl-value">{{ curlPreview.endpoint_path }}</span>
+        </div>
+        <div class="curl-preview-row" v-if="curlPreview.model">
+          <span class="curl-label">{{ t('llm.provider.models') }}:</span>
+          <span class="curl-value">{{ curlPreview.model }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="curlDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmCurlImport">{{ t('llm.provider.confirmImport') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -367,6 +429,9 @@ const activeProviderId = ref(null)
 const activeCollapse = ref([])
 const activeCollapse2 = ref([])
 const curlText = ref('')
+const curlDialogVisible = ref(false)
+const curlPreview = ref(null)
+const curlPendingProvider = ref(null)
 const loadingConfigs = ref(false)
 
 const navItems = [
@@ -392,7 +457,7 @@ const shortcuts = reactive([
   { key: 'openSettings', name: '打开设置', keys: 'Ctrl + ,' }
 ])
 
-const protocols = ['OpenAI', 'DeepSeek']
+const protocols = ['OpenAI', 'Ollama']
 
 const presetUrls = [
   { label: '官网', value: '' },
@@ -401,46 +466,69 @@ const presetUrls = [
   { label: 'DeepSeek', value: 'https://api.deepseek.com/v1' },
   { label: '豆包', value: 'https://ark.cn-beijing.volces.com/api/v3' },
   { label: '百度', value: 'https://qianfan.chatbaidu.com/v1' },
-  { label: '讯飞', value: 'https://xinghuo.xfyun.cn/v1' }
+  { label: '通义', value: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  { label: 'Ollama', value: 'http://localhost:11434' }
 ]
 
 const showKeyMap = reactive({})
 
 const providers = reactive([])
 
-const mapApiToProvider = (raw) => ({
-  id: raw.id,
-  name: raw.name || raw.provider_name || '',
-  enabled: raw.enabled ?? raw.is_active ?? true,
-  protocol: raw.protocol || (raw.api_type === 'deepseek' ? 'DeepSeek' : 'OpenAI'),
-  endpoint_path: raw.endpoint_path || '/chat/completions',
-  base_url: raw.base_url || raw.api_base || '',
-  api_key: raw.api_key || raw.api_secret || '',
-  timeout: raw.timeout ?? raw.timeout_seconds ?? 60,
-  rateUnlimited: raw.rateUnlimited ?? (raw.rate_limit === 0),
-  rateLimit: raw.rateLimit ?? raw.rate_limit ?? 50,
-  models: Array.isArray(raw.models) ? raw.models : (raw.model ? [raw.model] : []),
-  newModel: '',
-  _isNew: false,
-  _saving: false,
-  _testing: false,
-  _testResult: raw._testResult || null
-})
+const mapApiToProvider = (raw) => {
+  const apiKey = raw.api_key_masked || ''
+  const protocol = raw.provider === 'ollama' ? 'Ollama' : 'OpenAI'
+  return {
+    id: raw.id,
+    name: raw.name || '',
+    enabled: raw.is_active ?? true,
+    is_default: raw.is_default ?? false,
+    protocol,
+    endpoint_path: '/chat/completions',
+    base_url: raw.base_url || '',
+    api_key: apiKey,
+    _keyMasked: !!apiKey,
+    timeout: raw.timeout_seconds ?? 60,
+    rateUnlimited: raw.rate_unlimited ?? false,
+    rateLimit: raw.rate_limit ?? 50,
+    models: raw.model ? [raw.model, ...(raw.usage || raw.usage_list || [])] : [],
+    newModel: '',
+    _isNew: false,
+    _saving: false,
+    _testing: false,
+    _testResult: null
+  }
+}
 
-const mapProviderToApi = (provider) => ({
-  name: provider.name,
-  provider: provider.protocol === 'DeepSeek' ? 'deepseek' : 'openai',
-  protocol: provider.protocol,
-  api_type: provider.protocol === 'DeepSeek' ? 'deepseek' : 'openai',
-  base_url: provider.base_url,
-  endpoint_path: provider.endpoint_path,
-  api_key: provider.api_key,
-  timeout_seconds: provider.timeout,
-  rate_limit: provider.rateUnlimited ? 0 : provider.rateLimit,
-  models: provider.models,
-  enabled: provider.enabled,
-  is_active: provider.enabled
-})
+const mapProviderToApi = (provider, forTest = false) => {
+  const data = {
+    name: provider.name,
+    provider: provider.protocol === 'Ollama' ? 'ollama' : 'openai',
+    base_url: provider.base_url,
+    model: provider.models[0] || '',
+    temperature: 0.2,
+    max_tokens: 4096,
+    timeout_seconds: provider.timeout,
+    max_retries: 2,
+    rate_limit: provider.rateLimit,
+    rate_unlimited: provider.rateUnlimited,
+    usage: provider.models.slice(1),
+    is_default: provider.is_default || false,
+    is_active: provider.enabled
+  }
+  if (forTest) {
+    data.endpoint_path = provider.endpoint_path
+    if (!provider._keyMasked && provider.api_key) {
+      data.api_key = provider.api_key
+    } else if (provider._keyMasked) {
+      data.api_key = ''
+    }
+  } else {
+    if (!provider._keyMasked && provider.api_key) {
+      data.api_key = provider.api_key
+    }
+  }
+  return data
+}
 
 const loadConfigs = async () => {
   loadingConfigs.value = true
@@ -470,12 +558,53 @@ const toggleKeyVisibility = (id) => {
   showKeyMap[id] = !showKeyMap[id]
 }
 
+const clearKey = (provider) => {
+  provider.api_key = ''
+  provider._keyMasked = false
+  delete showKeyMap[provider.id]
+}
+
+const toggleEnabled = async (provider) => {
+  if (provider._isNew || typeof provider.id !== 'number') return
+  try {
+    const payload = { is_active: provider.enabled }
+    await updateLLMConfig(provider.id, payload)
+  } catch (e) {
+    provider.enabled = !provider.enabled
+    ElMessage.error(t('llm.messages.saveFailed'))
+  }
+}
+
+const onKeyInput = (provider) => {
+  if (provider.api_key) {
+    provider._keyMasked = false
+  }
+}
+
+const setProtocol = (provider, p) => {
+  provider.protocol = p
+  if (p === 'Ollama') {
+    provider.endpoint_path = '/api/chat'
+  } else {
+    if (provider.endpoint_path === '/api/chat') {
+      provider.endpoint_path = '/chat/completions'
+    }
+  }
+}
+
 const addProvider = () => {
+  const usedSeqs = new Set()
+  for (const p of providers) {
+    const m = p.name?.match(/^.*(\d+)$/)
+    if (m) usedSeqs.add(parseInt(m[1], 10))
+  }
+  let seq = 1
+  while (usedSeqs.has(seq)) seq++
   const tempId = `temp-${Date.now()}`
   const p = {
-    id: tempId, name: '', enabled: true, protocol: 'OpenAI',
+    id: tempId, name: `${t('llm.provider.nameHeaderPrefix')}${seq}`, enabled: true, protocol: 'OpenAI',
     endpoint_path: '/chat/completions', base_url: '',
-    api_key: '', timeout: 60,
+    api_key: '', _keyMasked: false, timeout: 60,
     rateUnlimited: false, rateLimit: 50, models: [],
     newModel: '',
     _isNew: true,
@@ -485,36 +614,44 @@ const addProvider = () => {
   }
   providers.push(p)
   expandedId.value = tempId
-  activeProviderId.value = tempId
 }
 
 const deleteProvider = async (provider) => {
-  if (typeof provider.id === 'number' && !provider._isNew) {
-    try {
-      await ElMessageBox.confirm(
-        t('llm.messages.confirmDelete'),
-        t('llm.messages.deleteTitle'),
-        { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') }
-      )
-    } catch {
-      return
-    }
-    try {
-      await deleteLLMConfig(provider.id)
-      ElMessage.success(t('llm.messages.configDeleted'))
-    } catch (e) {
-      ElMessage.warning(t('llm.messages.deleteFailed'))
-    }
+  if (provider._isNew || typeof provider.id !== 'number') {
+    const idx = providers.findIndex(p => p.id === provider.id)
+    if (idx > -1) providers.splice(idx, 1)
+    if (expandedId.value === provider.id) expandedId.value = null
+    if (activeProviderId.value === provider.id) activeProviderId.value = providers[0]?.id || null
+    return
   }
-  const idx = providers.findIndex(p => p.id === provider.id)
-  if (idx > -1) providers.splice(idx, 1)
-  if (expandedId.value === provider.id) expandedId.value = null
-  if (activeProviderId.value === provider.id) activeProviderId.value = providers[0]?.id || null
+  try {
+    await ElMessageBox.confirm(
+      t('llm.messages.confirmDelete'),
+      t('llm.messages.deleteTitle'),
+      { type: 'warning', confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel') }
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteLLMConfig(provider.id)
+    ElMessage.success(t('llm.messages.configDeleted'))
+    const idx = providers.findIndex(p => p.id === provider.id)
+    if (idx > -1) providers.splice(idx, 1)
+    if (expandedId.value === provider.id) expandedId.value = null
+    if (activeProviderId.value === provider.id) activeProviderId.value = providers[0]?.id || null
+  } catch (e) {
+    ElMessage.warning(t('llm.messages.deleteFailed'))
+  }
 }
 
 const saveProvider = async (provider) => {
-  if (!provider.name || !provider.base_url || !provider.api_key) {
+  if (!provider.name || !provider.base_url) {
     ElMessage.warning(t('llm.messages.needFields'))
+    return
+  }
+  if (!provider.models || provider.models.length === 0) {
+    ElMessage.warning(t('llm.messages.needModel'))
     return
   }
   provider._saving = true
@@ -524,9 +661,18 @@ const saveProvider = async (provider) => {
       const data = await saveLLMConfig(payload)
       if (data?.id) provider.id = data.id
       provider._isNew = false
+      provider._keyMasked = true
       ElMessage.success(t('llm.messages.configCreated'))
     } else {
-      await updateLLMConfig(provider.id, payload)
+      const updatePayload = mapProviderToApi(provider)
+      if (provider._keyMasked) {
+        delete updatePayload.api_key
+      }
+      await updateLLMConfig(provider.id, updatePayload)
+      if (updatePayload.api_key) {
+        provider._keyMasked = true
+        provider.api_key = ''
+      }
       ElMessage.success(t('llm.messages.configSaved'))
     }
   } catch (e) {
@@ -537,16 +683,30 @@ const saveProvider = async (provider) => {
 }
 
 const testProvider = async (provider) => {
-  if (!provider.base_url || !provider.api_key) {
+  if (!provider.base_url) {
     ElMessage.warning(t('llm.messages.needKey'))
+    return
+  }
+  if (provider._keyMasked && !provider.api_key) {
+    ElMessage.warning(t('llm.messages.needKey'))
+    return
+  }
+  if (!provider.models || provider.models.length === 0) {
+    ElMessage.warning(t('llm.messages.needModel'))
     return
   }
   provider._testing = true
   provider._testResult = null
   try {
-    const payload = mapProviderToApi(provider)
+    const payload = mapProviderToApi(provider, true)
+    if (provider._keyMasked && !provider.api_key) {
+      delete payload.api_key
+    }
+    if (typeof provider.id === 'number' && !provider._isNew) {
+      payload.config_id = provider.id
+    }
     const data = await testLLMConfig(payload)
-    provider._testResult = { ok: data?.ok ?? data?.success ?? true, msg: data?.message || '' }
+    provider._testResult = { ok: data?.success ?? true, msg: data?.message || '' }
     if (provider._testResult.ok) {
       ElMessage.success(t('llm.messages.testSuccess'))
     } else {
@@ -554,7 +714,6 @@ const testProvider = async (provider) => {
     }
   } catch (e) {
     provider._testResult = { ok: false, msg: e?.message || t('llm.messages.testFailed') }
-    ElMessage.error(t('llm.messages.testFailed'))
   } finally {
     provider._testing = false
   }
@@ -571,22 +730,180 @@ const removeModel = (provider, idx) => {
   provider.models.splice(idx, 1)
 }
 
-const importFromCurl = (provider) => {
+const parseCurl = (provider) => {
   if (!curlText.value.trim()) return
-  const match = curlText.value.match(/-H\s*['"]Authorization:\s*Bearer\s+([^'"]+)['"]/)
-  if (match) provider.api_key = match[1]
-  const urlMatch = curlText.value.match(/curl\s+['"]([^'"]+)['"]/)
-  if (urlMatch) {
-    const fullUrl = urlMatch[1]
-    const pathMatch = fullUrl.match(/^(https?:\/\/[^/]+)(\/[^?]*)?/)
-    if (pathMatch) {
-      provider.base_url = pathMatch[1]
-      const path = pathMatch[2] || '/'
-      if (path.includes('/chat/completions')) provider.endpoint_path = '/chat/completions'
-      else if (path.includes('/responses')) provider.endpoint_path = '/responses'
+  const raw = curlText.value.trim()
+  const result = {
+    protocol: 'OpenAI',
+    base_url: '',
+    endpoint_path: '/chat/completions',
+    model: '',
+    api_key: ''
+  }
+
+  // Extract URL
+  const urlMatch = raw.match(/curl\s+(?:-X\s+\w+\s+)?['"]?(https?:\/\/[^'"\s]+)['"]?/)
+  if (!urlMatch) {
+    ElMessage.warning(t('llm.messages.parseFailed'))
+    return
+  }
+  const fullUrl = urlMatch[1]
+
+  // Parse URL to extract base and path
+  try {
+    const urlObj = new URL(fullUrl)
+    const host = urlObj.origin
+    const pathname = urlObj.pathname
+
+    // Find which endpoint pattern matches
+    const endpointPatterns = ['/chat/completions', '/responses', '/api/chat']
+    let matchedEndpoint = null
+    let basePath = pathname
+
+    for (const ep of endpointPatterns) {
+      const idx = pathname.indexOf(ep)
+      if (idx !== -1) {
+        matchedEndpoint = ep
+        basePath = pathname.substring(0, idx)
+        break
+      }
+    }
+
+    if (matchedEndpoint === '/api/chat') {
+      result.endpoint_path = '/api/chat'
+      result.base_url = host
+      result.protocol = 'Ollama'
+    } else if (matchedEndpoint) {
+      result.endpoint_path = matchedEndpoint
+      result.base_url = (host + basePath).replace(/\/$/, '')
+    } else {
+      result.endpoint_path = '/chat/completions'
+      result.base_url = (host + pathname).replace(/\/$/, '')
+    }
+  } catch {
+    // Fallback regex
+    const urlMatch = fullUrl.match(/^(https?:\/\/[^/]+)(\/[^?]*)?/)
+    if (urlMatch) {
+      const host = urlMatch[1]
+      const path = urlMatch[2] || ''
+
+      const endpointPatterns = ['/chat/completions', '/responses', '/api/chat']
+      let matchedEndpoint = null
+      let basePath = path
+
+      for (const ep of endpointPatterns) {
+        const idx = path.indexOf(ep)
+        if (idx !== -1) {
+          matchedEndpoint = ep
+          basePath = path.substring(0, idx)
+          break
+        }
+      }
+
+      if (matchedEndpoint === '/api/chat') {
+        result.endpoint_path = '/api/chat'
+        result.base_url = host
+        result.protocol = 'Ollama'
+      } else if (matchedEndpoint) {
+        result.endpoint_path = matchedEndpoint
+        result.base_url = (host + basePath).replace(/\/$/, '')
+      } else {
+        result.endpoint_path = '/chat/completions'
+        result.base_url = (host + path).replace(/\/$/, '')
+      }
     }
   }
+
+  // Determine protocol from URL and normalize base URL
+  if (result.base_url.includes('ollama') || result.base_url.includes(':11434')) {
+    result.protocol = 'Ollama'
+  } else if (result.base_url.includes('bigmodel.cn')) {
+    result.protocol = 'OpenAI'
+    result.base_url = 'https://open.bigmodel.cn/api/paas/v4'
+  } else if (result.base_url.includes('mimo.chat')) {
+    result.protocol = 'OpenAI'
+    result.base_url = 'https://api.mimo.chat/v1'
+  } else if (result.base_url.includes('deepseek')) {
+    result.protocol = 'OpenAI'
+    result.base_url = 'https://api.deepseek.com/v1'
+  } else if (result.base_url.includes('volces.com')) {
+    result.protocol = 'OpenAI'
+    result.base_url = 'https://ark.cn-beijing.volces.com/api/v3'
+  } else if (result.base_url.includes('baidu.com') || result.base_url.includes('qianfan')) {
+    result.protocol = 'OpenAI'
+    result.base_url = 'https://qianfan.chatbaidu.com/v1'
+  } else if (result.base_url.includes('aliyuncs.com') || result.base_url.includes('dashscope')) {
+    result.protocol = 'OpenAI'
+    result.base_url = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+  } else {
+    result.protocol = 'OpenAI'
+  }
+
+  // Extract API key - handle both with and without "Bearer" prefix in value
+  const keyMatch = raw.match(/-H\s+['"]?Authorization:\s*Bearer\s+(sk-[A-Za-z0-9_\-]+)['"]?/i)
+  if (keyMatch) {
+    result.api_key = keyMatch[1]
+  } else {
+    // Try alternative pattern: the entire header value
+    const altKeyMatch = raw.match(/-H\s+['"]Authorization:\s*['"]Bearer\s+(sk-[^'"]+)['"]/i)
+    if (altKeyMatch) {
+      result.api_key = altKeyMatch[1]
+    }
+  }
+
+  // Extract model from body JSON
+  const bodyMatch = raw.match(/-d\s+['"]({[\s\S]*?})['"]/)
+  if (bodyMatch) {
+    try {
+      const body = JSON.parse(bodyMatch[1])
+      if (body.model) result.model = body.model
+    } catch {
+      // Try to extract model with regex
+      const modelMatch = bodyMatch[1].match(/"model"\s*:\s*"([^"]+)"/)
+      if (modelMatch) result.model = modelMatch[1]
+    }
+  }
+
+  // Try alternative body pattern: -d '...' or --data '...'
+  if (!result.model) {
+    const altBodyMatch = raw.match(/(?:-d|--data)\s+['"]([\s\S]*?)['"](?:\s|$)/)
+    if (altBodyMatch) {
+      try {
+        const body = JSON.parse(altBodyMatch[1])
+        if (body.model) result.model = body.model
+      } catch {
+        const modelMatch = altBodyMatch[1].match(/"model"\s*:\s*"([^"]+)"/)
+        if (modelMatch) result.model = modelMatch[1]
+      }
+    }
+  }
+
+  curlPreview.value = result
+  curlPendingProvider.value = provider
+  curlDialogVisible.value = true
+}
+
+const confirmCurlImport = () => {
+  const provider = curlPendingProvider.value
+  const preview = curlPreview.value
+  if (!provider || !preview) return
+
+  provider.protocol = preview.protocol
+  provider.base_url = preview.base_url
+  provider.endpoint_path = preview.endpoint_path
+  if (preview.api_key) {
+    provider.api_key = preview.api_key
+    provider._keyMasked = false
+  }
+  if (preview.model) {
+    provider.newModel = preview.model
+  }
+
+  curlDialogVisible.value = false
   curlText.value = ''
+  curlPreview.value = null
+  curlPendingProvider.value = null
+  ElMessage.success(t('llm.provider.importSuccess'))
 }
 
 onMounted(() => {
@@ -742,6 +1059,42 @@ onMounted(() => {
   }
 }
 
+.curl-preview {
+  padding: 8px 0;
+
+  .curl-preview-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid $border-light;
+
+    &:last-child { border-bottom: none; }
+  }
+
+  .curl-label {
+    width: 110px;
+    flex-shrink: 0;
+    font-size: 13px;
+    color: $text-secondary;
+    font-weight: 500;
+  }
+
+  .curl-value {
+    flex: 1;
+    font-size: 13px;
+    color: $text-primary;
+    font-family: 'SF Mono', Consolas, Monaco, monospace;
+    background: rgba(59, 130, 246, 0.04);
+    padding: 3px 8px;
+    border-radius: 4px;
+
+    &.curl-value-break {
+      word-break: break-all;
+      white-space: normal;
+    }
+  }
+}
+
 .provider-card {
   border: 1px solid $border-light;
   border-radius: 12px;
@@ -756,6 +1109,11 @@ onMounted(() => {
   &.expanded {
     border-color: $primary-color;
     box-shadow: 0 2px 12px rgba(59, 130, 246, 0.1);
+  }
+
+  &.disabled {
+    opacity: 0.55;
+    filter: grayscale(0.5);
   }
 }
 
@@ -775,7 +1133,15 @@ onMounted(() => {
 .card-header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+
+  .el-radio {
+    margin-right: -4px;
+
+    :deep(.el-radio__label) {
+      display: none;
+    }
+  }
 }
 
 .drag-handle {
@@ -815,14 +1181,23 @@ onMounted(() => {
   color: $text-secondary;
   cursor: pointer;
   transition: $transition-base;
-  padding: 4px;
+  padding: 6px;
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
 
   &:hover {
     color: $text-primary;
+    background: rgba(0, 0, 0, 0.04);
   }
 
   &.delete:hover {
     color: #EF4444;
+    background: rgba(239, 68, 68, 0.08);
   }
 
   &.expand-arrow {
@@ -910,29 +1285,32 @@ onMounted(() => {
 
 .protocol-tabs {
   display: flex;
-  gap: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid $border-light;
+  gap: 8px;
   width: fit-content;
 }
 
 .protocol-tab {
-  padding: 8px 20px;
+  padding: 6px 18px;
   font-size: 13px;
   font-weight: 500;
   color: $text-regular;
   cursor: pointer;
   transition: $transition-base;
   background: $bg-white;
+  border: 1px solid $border-light;
+  border-radius: 20px;
+  user-select: none;
 
   &:hover {
     background: $bg-light;
+    border-color: rgba(59, 130, 246, 0.4);
   }
 
   &.active {
     background: $primary-color;
     color: white;
+    border-color: $primary-color;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25);
   }
 }
 
@@ -964,6 +1342,46 @@ onMounted(() => {
     font-size: 12px;
     color: $text-secondary;
     line-height: 1.5;
+  }
+
+  .ref-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .ref-label {
+      font-size: 12px;
+      color: $text-secondary;
+      line-height: 1.5;
+    }
+  }
+
+  .local-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    border-color: $primary-color;
+    color: $primary-color;
+    background: rgba(59, 130, 246, 0.06);
+
+    &:hover {
+      background: $primary-color;
+      color: white;
+    }
+  }
+
+  .base-url-hint {
+    font-size: 12px;
+    color: $text-secondary;
+    line-height: 1.6;
+
+    .full-url-value {
+      font-family: 'SF Mono', Consolas, Monaco, monospace;
+      color: $text-primary;
+      background: rgba(59, 130, 246, 0.05);
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
   }
 }
 
@@ -1013,10 +1431,61 @@ onMounted(() => {
     }
   }
 
+  .key-clear {
+    position: absolute;
+    right: 34px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $text-placeholder;
+    cursor: pointer;
+    z-index: 1;
+    font-size: 14px;
+
+    &:hover {
+      color: #ef4444;
+    }
+  }
+
   .el-input {
     input {
       padding-right: 36px;
     }
+  }
+}
+
+.key-masked-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid $border-light;
+  border-radius: 6px;
+  background: $bg-white;
+
+  .key-masked-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: 'SF Mono', Consolas, Monaco, monospace;
+    font-size: 13px;
+    color: $text-primary;
+    cursor: text;
+
+    &:not(.reveal) {
+      -webkit-text-security: disc;
+      letter-spacing: 2px;
+    }
+  }
+
+  .key-toggle,
+  .key-clear {
+    position: static;
+    transform: none;
+    font-size: 16px;
+    flex-shrink: 0;
   }
 }
 
@@ -1036,9 +1505,21 @@ onMounted(() => {
   align-items: center;
   gap: 14px;
 
+  .rate-limit-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .rate-limit-left {
+    flex-shrink: 0;
+  }
+
   .rate-slider {
     flex: 1;
-    max-width: 300px;
+    min-width: 0;
     margin: 0;
   }
 
@@ -1242,20 +1723,53 @@ html.dark .settings-root {
       border-color: #3b82f6;
       box-shadow: 0 2px 12px rgba(59, 130, 246, 0.15);
     }
+    &.disabled {
+      opacity: 0.5;
+    }
   }
   :deep(.card-header) {
     &:hover { background: rgba(255, 255, 255, 0.03); }
   }
   :deep(.provider-name) { color: #f8fafc; }
+  :deep(.action-icon) {
+    &:hover { background: rgba(255, 255, 255, 0.06); }
+    &.delete:hover { background: rgba(239, 68, 68, 0.15); }
+  }
+  :deep(.el-radio__label) { display: none; }
   :deep(.card-body) {
     background: #252526;
     border-top-color: #3c3c3c;
   }
   :deep(.field-label) { color: #e2e8f0; }
+  :deep(.protocol-tab) {
+    background: transparent;
+    border-color: #3c3c3c;
+    color: #94a3b8;
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: #60a5fa;
+      color: #e2e8f0;
+    }
+    &.active {
+      background: #3b82f6;
+      color: white;
+      border-color: #3b82f6;
+    }
+  }
   :deep(.add-provider-btn) {
     border-color: #3c3c3c;
     color: #94a3b8;
     &:hover { border-color: #3b82f6; color: #60a5fa; background: rgba(59, 130, 246, 0.05); }
+  }
+  .curl-preview {
+    .curl-preview-row {
+      border-bottom-color: #3c3c3c;
+    }
+    .curl-label { color: #94a3b8; }
+    .curl-value {
+      color: #f8fafc;
+      background: rgba(59, 130, 246, 0.08);
+    }
   }
 }
 </style>

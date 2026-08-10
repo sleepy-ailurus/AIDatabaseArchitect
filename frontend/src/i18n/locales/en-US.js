@@ -443,13 +443,19 @@ export default {
     provider: {
       name: 'Provider Name',
       namePlaceholder: 'Please enter provider name',
+      nameHeaderPrefix: 'Provider ',
       protocol: 'API Protocol',
       curlImport: 'Curl Import',
+      parseCurl: 'Parse & Validate',
+      parseSuccess: 'Parse successful, the following config will be imported',
+      confirmImport: 'Confirm Import',
       curlPlaceholder: 'Paste curl command, auto-parse config...',
       import: 'Import',
       endpoint: 'Endpoint Path',
-      baseUrl: 'Base URL (excluding endpoint path, typically v1/v4 etc. at the end. The full path is the curl request URL.)',
+      baseUrl: 'Base URL',
+      fullUrl: 'Full URL',
       apiKey: 'API Key',
+      keyReEnter: 'Already saved, re-enter to update',
       timeout: 'Timeout (seconds)',
       timeoutDesc: 'seconds',
       rateLimit: 'Rate Limit',
@@ -475,11 +481,14 @@ export default {
       loadFailed: 'Failed to load model configuration',
       saveFailed: 'Save failed, please check backend service',
       needFields: 'Please fill in provider name, Base URL and API key',
+      needModel: 'Please add at least one model',
       needBaseUrl: 'Please fill in Base URL',
       needKey: 'Please fill in Base URL and API key',
       confirmDelete: 'Are you sure you want to delete this configuration? This action cannot be undone.',
       deleteTitle: 'Delete Configuration',
-      deleteFailed: 'Failed to delete configuration'
+      deleteFailed: 'Failed to delete configuration',
+      parseFailed: 'Cannot parse curl command, please check the format',
+      importSuccess: 'Configuration imported'
     }
   },
   common: {

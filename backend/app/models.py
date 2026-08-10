@@ -197,9 +197,12 @@ class LLMConfig(Base):
     max_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    rate_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    rate_unlimited: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # relation_analysis | doc_generation | qa  (stored as JSON list of usages)
     usage: Mapped[list | None] = mapped_column(JSON, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_test_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 

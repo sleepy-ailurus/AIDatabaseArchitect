@@ -5,6 +5,7 @@ function normalizeKey(e) {
   if (e.ctrlKey || e.metaKey) parts.push('Ctrl')
   if (e.shiftKey) parts.push('Shift')
   if (e.altKey) parts.push('Alt')
+  if (!e.key) return null
   const key = e.key.toLowerCase()
   if (key === 'control' || key === 'meta' || key === 'shift' || key === 'alt') return null
   parts.push(key)

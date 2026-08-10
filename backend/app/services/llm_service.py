@@ -18,6 +18,37 @@ from app.services.schema_parser import ParsedSchema, is_type_compatible
 
 
 # ---------------------------------------------------------------------------
+# Sliding window rate limiter (in-memory, per-config)
+# ---------------------------------------------------------------------------
+_rate_limit_windows: dict[int, list[float]] = {}
+
+
+def check_rate_limit(config_id: int, rate_limit: int, unlimited: bool = False) -> bool:
+    """Check whether a request is within the rate limit using a 1-second sliding window.
+
+    Returns True if the request is allowed, False if rate-limited.
+    When *unlimited* is True, always returns True.
+    """
+    if unlimited:
+        return True
+
+    now = time.time()
+    window_start = now - 1.0  # 1-second window
+
+    timestamps = _rate_limit_windows.get(config_id, [])
+    # Remove timestamps outside the window
+    timestamps = [t for t in timestamps if t >= window_start]
+
+    if len(timestamps) < rate_limit:
+        timestamps.append(now)
+        _rate_limit_windows[config_id] = timestamps
+        return True
+
+    _rate_limit_windows[config_id] = timestamps
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Config wrapper
 # ---------------------------------------------------------------------------
 @dataclass
@@ -26,10 +57,14 @@ class LLMSettings:
     base_url: str
     api_key: str
     model: str
+    endpoint_path: str = "/chat/completions"
     temperature: float = 0.2
     max_tokens: int = 4096
     timeout_seconds: int = 60
     max_retries: int = 2
+    config_id: int | None = None
+    rate_limit: int = 50
+    rate_unlimited: bool = False
 
 
 def settings_from_config(config) -> LLMSettings:
@@ -43,6 +78,9 @@ def settings_from_config(config) -> LLMSettings:
         max_tokens=config.max_tokens,
         timeout_seconds=config.timeout_seconds,
         max_retries=config.max_retries,
+        config_id=config.id,
+        rate_limit=config.rate_limit,
+        rate_unlimited=config.rate_unlimited,
     )
 
 
@@ -51,8 +89,17 @@ def settings_from_config(config) -> LLMSettings:
 # ---------------------------------------------------------------------------
 def test_llm_connection(settings: LLMSettings) -> dict:
     """Send a minimal chat request to verify credentials/model availability."""
+    if settings.config_id is not None:
+        if not check_rate_limit(settings.config_id, settings.rate_limit, settings.rate_unlimited):
+            return {
+                "success": False,
+                "message": f"请求频率超限（{settings.rate_limit}次/秒），请稍后重试",
+                "elapsed_ms": 0,
+                "model": settings.model,
+            }
+
     start = time.time()
-    url = _chat_url(settings.base_url)
+    url = _chat_url(settings.base_url, settings.endpoint_path)
     headers = {"Authorization": f"Bearer {settings.api_key}", "Content-Type": "application/json"}
     payload = {
         "model": settings.model,
@@ -120,16 +167,22 @@ def _truncate(text: str, n: int = 300) -> str:
     return text[:n] + "..." if len(text) > n else text
 
 
-def _chat_url(base_url: str) -> str:
+def _chat_url(base_url: str, endpoint_path: str = "/chat/completions") -> str:
     base = base_url.rstrip("/")
-    if base.endswith("/chat/completions"):
+    ep = endpoint_path if endpoint_path.startswith("/") else f"/{endpoint_path}"
+    if base.endswith(ep):
         return base
-    if base.endswith("/v1"):
-        return base + "/chat/completions"
-    if "/v1/" in base:
-        return base + "/chat/completions"
-    # DeepSeek-style base URLs (https://api.deepseek.com) need /v1 appended.
-    return base + "/v1/chat/completions"
+    # Ollama and other local endpoints don't use /v1 prefix
+    if ep in ("/api/chat", "/chat/completions", "/responses"):
+        # Only add /v1 for OpenAI-compatible providers, not Ollama
+        if base.endswith("/v1"):
+            return base + ep
+        if "/v1/" in base:
+            return base + ep
+        if base.endswith(":11434") or "ollama" in base.lower():
+            return base + ep
+        return base + "/v1" + ep
+    return base + ep
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +365,10 @@ def analyze_candidates(
     if not candidates:
         return []
 
+    if settings.config_id is not None:
+        if not check_rate_limit(settings.config_id, settings.rate_limit, settings.rate_unlimited):
+            raise LLMError(f"请求频率超限（{settings.rate_limit}次/秒），请稍后重试")
+
     candidate_keys = {
         (c.source_table.lower(), c.source_column.lower(), c.target_table.lower(), c.target_column.lower())
         for c in candidates
@@ -328,7 +385,7 @@ def analyze_candidates(
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
     }
-    url = _chat_url(settings.base_url)
+    url = _chat_url(settings.base_url, settings.endpoint_path)
 
     last_error: str | None = None
     for attempt in range(settings.max_retries + 1):

@@ -441,13 +441,19 @@ export default {
     provider: {
       name: '供应商名称',
       namePlaceholder: '请输入供应商名称',
+      nameHeaderPrefix: '供应商',
       protocol: 'API 协议',
       curlImport: 'Curl 导入',
+      parseCurl: '校验并解析',
+      parseSuccess: '解析成功，以下配置将被导入',
+      confirmImport: '确认导入',
       curlPlaceholder: '粘贴 curl 命令，自动解析配置...',
       import: '导入',
       endpoint: '端点路径',
-      baseUrl: 'Base URL（不含端点路径，结尾一般 v1/v4 等。完整路径，即是 curl 请求地址。）',
+      baseUrl: 'Base URL',
+      fullUrl: '完整地址',
       apiKey: '密钥',
+      keyReEnter: '已保存，重新输入以更新',
       timeout: '超时时间（秒）',
       timeoutDesc: '秒',
       rateLimit: '请求频率限制',
@@ -473,11 +479,14 @@ export default {
       loadFailed: '加载模型配置失败',
       saveFailed: '保存失败，请检查后端服务',
       needFields: '请填写供应商名称、Base URL 和密钥',
+      needModel: '请至少添加一个模型',
       needBaseUrl: '请先填写 Base URL',
       needKey: '请先填写 Base URL 和密钥',
       confirmDelete: '确定要删除此配置吗？该操作不可恢复。',
       deleteTitle: '删除配置',
-      deleteFailed: '删除配置失败'
+      deleteFailed: '删除配置失败',
+      parseFailed: '无法解析 curl 命令，请检查格式',
+      importSuccess: '配置已导入'
     }
   },
   common: {

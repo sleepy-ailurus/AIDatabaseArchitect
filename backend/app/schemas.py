@@ -241,9 +241,12 @@ class LLMConfigCreate(BaseModel):
     max_tokens: int = Field(default=4096, ge=1)
     timeout_seconds: int = Field(default=60, ge=1, le=600)
     max_retries: int = Field(default=2, ge=0, le=10)
+    rate_limit: int = Field(default=50, ge=1, le=200)
+    rate_unlimited: bool = False
     usage: list[str] | None = None
     usage_list: list[str] | None = None
     is_default: bool = False
+    is_active: bool = True
 
 
 class LLMConfigUpdate(BaseModel):
@@ -256,9 +259,12 @@ class LLMConfigUpdate(BaseModel):
     max_tokens: int | None = Field(default=None, ge=1)
     timeout_seconds: int | None = Field(default=None, ge=1, le=600)
     max_retries: int | None = Field(default=None, ge=0, le=10)
+    rate_limit: int | None = Field(default=None, ge=1, le=200)
+    rate_unlimited: bool | None = None
     usage: list[str] | None = None
     usage_list: list[str] | None = None
     is_default: bool | None = None
+    is_active: bool | None = None
 
 
 class LLMConfigOut(ORMModel):
@@ -271,9 +277,12 @@ class LLMConfigOut(ORMModel):
     max_tokens: int
     timeout_seconds: int
     max_retries: int
+    rate_limit: int = 50
+    rate_unlimited: bool = False
     usage: list[str] | None
     usage_list: list[str] | None = None
     is_default: bool
+    is_active: bool = True
     last_test_ok: bool | None = None
     created_at: datetime
     api_key_masked: str | None = None
@@ -286,6 +295,7 @@ class LLMTestRequest(BaseModel):
     base_url: str | None = None
     api_key: str | None = None
     model: str | None = None
+    endpoint_path: str | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = None
     timeout_seconds: int | None = None

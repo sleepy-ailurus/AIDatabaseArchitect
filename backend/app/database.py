@@ -28,6 +28,30 @@ def init_db() -> None:
     from app import models  # noqa: F401  - ensure models are registered
 
     Base.metadata.create_all(bind=engine)
+    _migrate_llm_configs()
+
+
+def _migrate_llm_configs() -> None:
+    """Add missing columns to existing llm_configs table."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    columns = {col["name"] for col in inspector.get_columns("llm_configs")}
+    if "is_active" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE llm_configs ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1"
+            ))
+    if "rate_limit" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE llm_configs ADD COLUMN rate_limit INTEGER NOT NULL DEFAULT 50"
+            ))
+    if "rate_unlimited" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE llm_configs ADD COLUMN rate_unlimited BOOLEAN NOT NULL DEFAULT 0"
+            ))
 
 
 def get_db() -> Generator[Session, None, None]:
