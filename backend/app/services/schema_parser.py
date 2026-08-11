@@ -316,18 +316,23 @@ def parse_schema(
                     )
 
                 # Primary keys + unique indexes for column flags.
+                # NOTE: Only single-column UNIQUE indexes qualify a column as "is_unique".
+                # Multi-column (composite) UNIQUE indexes do NOT guarantee uniqueness of
+                # each column independently — they should NOT contribute to is_unique.
+                # e.g. UNIQUE(a,b,c) → a is not globally unique alone; only (a,b,c) tuple is.
                 pk_cols = set(inspector.get_pk_constraint(table_name).get("constrained_columns") or [])
                 unique_cols: set[str] = set()
                 for idx in inspector.get_indexes(table_name):
+                    idx_cols = list(idx.get("column_names") or [])
                     ptable.indexes.append(
                         {
                             "name": idx.get("name"),
-                            "columns": idx.get("column_names", []),
+                            "columns": idx_cols,
                             "unique": bool(idx.get("unique", False)),
                         }
                     )
-                    if idx.get("unique") and idx.get("column_names"):
-                        unique_cols.update(idx.get("column_names"))
+                    if idx.get("unique") and len(idx_cols) == 1:
+                        unique_cols.add(idx_cols[0])
 
                 # Columns.
                 for col in inspector.get_columns(table_name):

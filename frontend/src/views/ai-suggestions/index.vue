@@ -64,7 +64,7 @@
     <div class="suggestions-list" v-loading="loading">
       <div v-for="(s, idx) in filteredSuggestions" :key="s.id" class="suggestion-card" :class="[s.status, 'conf-' + getConfidenceLevel(s.confidence)]">
         <div class="card-left">
-          <div class="confidence-ring" :class="'level-' + getConfidenceLevel(s.confidence)">
+          <div class="confidence-ring" :class="'level-' + getConfidenceLevel(s.confidence)" v-if="settingsStore.showConfidence">
             <svg width="44" height="44" viewBox="0 0 44 44">
               <circle cx="22" cy="22" r="18" fill="none" stroke="#F1F5F9" stroke-width="4" />
               <circle
@@ -76,6 +76,9 @@
               />
             </svg>
             <span class="conf-value">{{ (s.confidence * 100).toFixed(0) }}%</span>
+          </div>
+          <div class="confidence-ring confidence-placeholder" v-else>
+            <el-icon :size="24" color="#94A3B8"><MagicStick /></el-icon>
           </div>
 
           <div class="suggestion-main">
@@ -178,30 +181,105 @@
         <el-button text @click="clearSelection">取消选择</el-button>
       </div>
     </div>
+
+    <!-- 全屏加载遮罩 -->
+    <div v-if="analyzing" class="loading-overlay">
+      <div class="loading-box">
+        <button class="loading-close-btn" @click="cancelAnalysis" title="取消分析">
+          <el-icon :size="16"><Close /></el-icon>
+        </button>
+        <div class="loading-spinner"></div>
+        <div class="loading-text">{{ loadingText }}</div>
+        <div class="loading-progress">
+          <el-progress
+            :percentage="analyzeProgress"
+            :stroke-width="8"
+            :show-text="true"
+            :text-inside="false"
+            color="#3B82F6"
+            style="width: 240px;"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { createAnalysisTask } from '@/api/analysis'
-import { getRelationships, confirmSuggestion as apiConfirm, rejectSuggestion as apiReject } from '@/api/relationship'
+import {
+  ArrowLeft,
+  Box,
+  ChatDotRound,
+  Check,
+  CircleCheck,
+  CircleCheckFilled,
+  CircleClose,
+  Close,
+  Collection,
+  Finished,
+  MagicStick,
+  Refresh,
+  Right,
+} from '@element-plus/icons-vue'
+import { createAnalysisTask, getAnalysisTask, cancelAnalysisTask } from '@/api/analysis'
+import {
+  getRelationships,
+  confirmSuggestion as apiConfirm,
+  rejectSuggestion as apiReject,
+  resetSuggestion as apiReset,
+  batchConfirmSuggestions as apiBatchConfirm,
+  batchRejectSuggestions as apiBatchReject
+} from '@/api/relationship'
+import { useSettingsStore } from '@/stores/settings'
 
 const route = useRoute()
 const projectId = computed(() => route.params.id)
+const settingsStore = useSettingsStore()
+
+// Map canonical backend status strings → audit-page UI status words.
+// Backend persist suggestions as `suggested`; once approved/rejected they become
+// `confirmed` / `rejected`. Audit UI uses `pending` for "not yet decided" because
+// that is the word used throughout filter tabs, checkboxes, and summary counts.
+const SERVER_STATUS_TO_UI = {
+  suggested: 'pending',
+  pending: 'pending',
+  confirmed: 'confirmed',
+  rejected: 'rejected',
+  manual: 'confirmed'
+}
+const UI_STATUS_TO_SERVER = {
+  pending: 'suggested',
+  confirmed: 'confirmed',
+  rejected: 'rejected'
+}
 
 const filter = ref('all')
 const tableFilter = ref('')
 const allSelected = ref(false)
 const loading = ref(false)
 const analyzing = ref(false)
+const analyzeProgress = ref(0)
+const loadingText = ref('准备中...')
+let pollTimer = null
+let currentTaskId = null
+const cancelled = ref(false)
 
 const suggestions = reactive([])
 
 const normalizeSuggestion = (raw) => {
   const confidence = Number(raw.confidence ?? raw.confidence_score ?? 0)
-  const status = raw.status || (raw.confirmed === true ? 'confirmed' : raw.confirmed === false ? 'rejected' : 'pending')
+  // Prefer the canonical server status when present. `suggested` is the real server
+  // enum for AI items still in review; the legacy raw.confirmed booleans fall back
+  // only when raw.status is not available (old payloads / mocked data).
+  const rawStatus = typeof raw.status === 'string' && raw.status.trim() !== ''
+    ? raw.status.trim()
+    : null
+  const status = rawStatus
+    ? (SERVER_STATUS_TO_UI[rawStatus.toLowerCase()] ?? 'pending')
+    : (raw.confirmed === true ? 'confirmed' : raw.confirmed === false ? 'rejected' : 'pending')
   const reason = Array.isArray(raw.reason) ? raw.reason
     : Array.isArray(raw.reasons) ? raw.reasons
     : (raw.reason ? [raw.reason] : [])
@@ -209,7 +287,7 @@ const normalizeSuggestion = (raw) => {
   const cardinalityMap = {
     'one-to-one': '1:1',
     'one-to-many': '1:N',
-    'many-to-one': '1:N',
+    'many-to-one': 'N:1',
     'many-to-many': 'N:N'
   }
   return {
@@ -234,7 +312,11 @@ const normalizeSuggestion = (raw) => {
 const fetchSuggestions = async () => {
   loading.value = true
   try {
-    const data = await getRelationships(projectId.value, { source_type: 'ai', include_pending: true })
+    // Do NOT filter by source_type=ai_suggestion here — the audit page must also
+    // surface ai_suggestion items that were promoted to source_type=manual after
+    // user approval so "已处理" counters stay consistent and reset / row actions
+    // remain available for every row ever produced by analysis.
+    const data = await getRelationships(projectId.value)
     const list = Array.isArray(data) ? data : (data?.items || data?.relationships || data?.suggestions || [])
     suggestions.splice(0, suggestions.length, ...list.map(normalizeSuggestion))
   } catch (e) {
@@ -243,6 +325,16 @@ const fetchSuggestions = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const STATUS_TEXT = {
+  pending: '等待开始...',
+  parsing: '正在解析 Schema 结构...',
+  analyzing: '正在生成候选关系...',
+  validating: 'AI 正在分析关系中...',
+  completed: '分析完成',
+  failed: '分析失败',
+  cancelled: '已取消',
 }
 
 const runAnalysis = async () => {
@@ -256,16 +348,112 @@ const runAnalysis = async () => {
     return
   }
   analyzing.value = true
+  analyzeProgress.value = 5
+  loadingText.value = '正在提交分析任务...'
+  cancelled.value = false
+  currentTaskId = null
+
   try {
     const task = await createAnalysisTask(projectId.value, { analysis_type: 'relationship' })
-    ElMessage.success(task?.message || '分析任务已提交，请稍后刷新查看结果')
-    setTimeout(() => fetchSuggestions(), 2000)
+    const taskId = task?.id
+    currentTaskId = taskId
+    if (!taskId) {
+      throw new Error('未获取到任务 ID')
+    }
+
+    loadingText.value = STATUS_TEXT.parsing || '解析中...'
+
+    // 轮询任务状态
+    await new Promise((resolve, reject) => {
+      const startTs = Date.now()
+      const MAX_WAIT = 180_000 // 3 分钟超时
+
+      pollTimer = setInterval(async () => {
+        try {
+          if (cancelled.value) {
+            clearInterval(pollTimer)
+            pollTimer = null
+            reject(new Error('已取消'))
+            return
+          }
+          const t = await getAnalysisTask(taskId)
+          if (!t) return
+          analyzeProgress.value = t.progress || analyzeProgress.value
+          loadingText.value = STATUS_TEXT[t.status] || t.status
+
+          if (t.status === 'completed') {
+            clearInterval(pollTimer)
+            pollTimer = null
+            resolve(t)
+          } else if (t.status === 'failed') {
+            clearInterval(pollTimer)
+            pollTimer = null
+            reject(new Error(t.error || '分析失败'))
+          } else if (t.status === 'cancelled') {
+            clearInterval(pollTimer)
+            pollTimer = null
+            reject(new Error('已取消'))
+          } else if (Date.now() - startTs > MAX_WAIT) {
+            clearInterval(pollTimer)
+            pollTimer = null
+            reject(new Error('分析超时，请稍后重试'))
+          }
+        } catch (err) {
+          if (err.message === '已取消') {
+            clearInterval(pollTimer)
+            pollTimer = null
+            reject(err)
+            return
+          }
+          // 忽略轮询中的单次网络错误
+          console.warn('Poll error:', err)
+        }
+      }, 1500)
+    })
+
+    ElMessage.success('AI 关系分析已完成')
+    await fetchSuggestions()
+
+    // 高置信度默认勾选功能：如果开启，自动确认置信度 >= 85% 的建议
+    if (settingsStore.autoCheckHigh) {
+      autoConfirmHighConfidence()
+    }
   } catch (e) {
-    ElMessage.error('启动分析失败')
+    if (e?.message === '已取消') {
+      ElMessage.info('已取消 AI 分析')
+    } else {
+      ElMessage.error(e?.message || '启动分析失败')
+    }
   } finally {
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
     analyzing.value = false
+    analyzeProgress.value = 0
+    currentTaskId = null
+    cancelled.value = false
   }
 }
+
+const cancelAnalysis = async () => {
+  if (!currentTaskId || cancelled.value) return
+  cancelled.value = true
+  loadingText.value = '正在取消...'
+  try {
+    await cancelAnalysisTask(currentTaskId)
+  } catch (e) {
+    // 忽略错误，可能任务已完成
+  }
+}
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+})
 
 const tableOptions = computed(() => {
   const set = new Set()
@@ -304,12 +492,16 @@ const getConfidenceColor = (c) => c >= 0.85 ? '#10B981' : c >= 0.6 ? '#F59E0B' :
 const confirmSuggestion = async (s) => {
   s._loading = true
   try {
-    await apiConfirm(s.id)
-    s.status = 'confirmed'
-    ElMessage.success('已确认该关系建议')
+    const updated = await apiConfirm(s.id)
+    // Always trust server truth. PATCH promoted source_type to manual and set
+    // status=confirmed. Translate that status back into the audit-page word.
+    const uiStatus = updated?.status
+      ? (SERVER_STATUS_TO_UI[String(updated.status).toLowerCase()] ?? 'confirmed')
+      : 'confirmed'
+    s.status = uiStatus
+    ElMessage.success('已确认该关系建议（返回ER编辑器即可看到连线）')
   } catch (e) {
-    s.status = 'confirmed'
-    ElMessage.warning('已确认（服务端未持久化）')
+    ElMessage.error(e?.response?.data?.detail || '确认失败，请稍后重试')
   } finally {
     s._loading = false
   }
@@ -318,53 +510,74 @@ const confirmSuggestion = async (s) => {
 const rejectSuggestion = async (s) => {
   s._loading = true
   try {
-    await apiReject(s.id)
-    s.status = 'rejected'
+    const updated = await apiReject(s.id)
+    const uiStatus = updated?.status
+      ? (SERVER_STATUS_TO_UI[String(updated.status).toLowerCase()] ?? 'rejected')
+      : 'rejected'
+    s.status = uiStatus
     ElMessage.success('已拒绝该关系建议')
   } catch (e) {
-    s.status = 'rejected'
-    ElMessage.warning('已拒绝（服务端未持久化）')
+    ElMessage.error(e?.response?.data?.detail || '拒绝失败，请稍后重试')
   } finally {
     s._loading = false
   }
 }
 
-const resetStatus = (s) => {
-  s.status = 'pending'
+const resetStatus = async (s) => {
+  // User clicked "撤销操作" — call reset endpoint which writes status=suggested
+  // server-side, then reflect pending back on the audit row so counters & tabs
+  // recompute without a full fetch.
+  s._loading = true
+  try {
+    const updated = await apiReset(s.id)
+    const uiStatus = updated?.status
+      ? (SERVER_STATUS_TO_UI[String(updated.status).toLowerCase()] ?? 'pending')
+      : 'pending'
+    s.status = uiStatus
+    ElMessage.success('已撤销，可继续审核')
+  } catch (e) {
+    ElMessage.warning(e?.response?.data?.detail || '无法撤销该关系')
+  } finally {
+    s._loading = false
+  }
 }
 
 const confirmAllVisible = async () => {
   const targets = filteredSuggestions.value.filter(s => s.status === 'pending')
   if (targets.length === 0) return
-  let ok = 0
-  for (const s of targets) {
-    try {
-      await apiConfirm(s.id)
-      s.status = 'confirmed'
-      ok++
-    } catch (e) {
-      s.status = 'confirmed'
-      ok++
+  try {
+    const updated = await apiBatchConfirm(projectId.value, targets.map(s => s.id))
+    const byId = new Map((updated || []).map(r => [String(r.id), r]))
+    for (const s of targets) {
+      const r = byId.get(String(s.id))
+      const uiStatus = r?.status
+        ? (SERVER_STATUS_TO_UI[String(r.status).toLowerCase()] ?? 'confirmed')
+        : 'confirmed'
+      s.status = uiStatus
     }
+    ElMessage.success(`已确认 ${targets.length} 条建议（返回ER编辑器即可看到连线）`)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || `批量确认失败`)
   }
-  ElMessage.success(`已确认 ${ok} 条建议`)
 }
 
 const rejectAllVisible = async () => {
   const targets = filteredSuggestions.value.filter(s => s.status === 'pending')
   if (targets.length === 0) return
-  let ok = 0
-  for (const s of targets) {
-    try {
-      await apiReject(s.id)
-      s.status = 'rejected'
-      ok++
-    } catch (e) {
-      s.status = 'rejected'
-      ok++
+  try {
+    const updated = await apiBatchReject(projectId.value, targets.map(s => s.id))
+    const byId = new Map((updated || []).map(r => [String(r.id), r]))
+    for (const s of targets) {
+      const r = byId.get(String(s.id))
+      const uiStatus = r?.status
+        ? (SERVER_STATUS_TO_UI[String(r.status).toLowerCase()] ?? 'rejected')
+        : 'rejected'
+      s.status = uiStatus
     }
+    ElMessage.success(`已拒绝 ${targets.length} 条建议`)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || `批量拒绝失败`)
   }
-  ElMessage.success(`已拒绝 ${ok} 条建议`)
 }
 
 const toggleSelectAll = (val) => {
@@ -377,42 +590,66 @@ const clearSelection = () => suggestions.forEach(s => s.selected = false)
 
 const batchConfirm = async () => {
   const targets = suggestions.filter(s => s.selected && s.status === 'pending')
-  let ok = 0
-  for (const s of targets) {
-    try {
-      await apiConfirm(s.id)
-      s.status = 'confirmed'
+  if (targets.length === 0) return
+  try {
+    const updated = await apiBatchConfirm(projectId.value, targets.map(s => s.id))
+    const byId = new Map((updated || []).map(r => [String(r.id), r]))
+    for (const s of targets) {
+      const r = byId.get(String(s.id))
+      const uiStatus = r?.status
+        ? (SERVER_STATUS_TO_UI[String(r.status).toLowerCase()] ?? 'confirmed')
+        : 'confirmed'
+      s.status = uiStatus
       s.selected = false
-      ok++
-    } catch (e) {
-      s.status = 'confirmed'
-      s.selected = false
-      ok++
     }
+    ElMessage.success(`已批量确认 ${targets.length} 条建议（返回ER编辑器即可看到连线）`)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || `批量确认失败`)
   }
-  ElMessage.success(`已批量确认 ${ok} 条建议`)
 }
 
 const batchReject = async () => {
   const targets = suggestions.filter(s => s.selected && s.status === 'pending')
-  let ok = 0
-  for (const s of targets) {
-    try {
-      await apiReject(s.id)
-      s.status = 'rejected'
+  if (targets.length === 0) return
+  try {
+    const updated = await apiBatchReject(projectId.value, targets.map(s => s.id))
+    const byId = new Map((updated || []).map(r => [String(r.id), r]))
+    for (const s of targets) {
+      const r = byId.get(String(s.id))
+      const uiStatus = r?.status
+        ? (SERVER_STATUS_TO_UI[String(r.status).toLowerCase()] ?? 'rejected')
+        : 'rejected'
+      s.status = uiStatus
       s.selected = false
-      ok++
-    } catch (e) {
-      s.status = 'rejected'
-      s.selected = false
-      ok++
     }
+    ElMessage.success(`已批量拒绝 ${targets.length} 条建议`)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || `批量拒绝失败`)
   }
-  ElMessage.success(`已批量拒绝 ${ok} 条建议`)
 }
 
-onMounted(() => {
-  if (projectId.value) fetchSuggestions()
+// 自动确认高置信度建议
+const autoConfirmHighConfidence = async () => {
+  if (!settingsStore.autoCheckHigh) return
+  const highConfSuggestions = suggestions.filter(s => s.confidence >= 0.85 && s.status === 'pending')
+  if (highConfSuggestions.length > 0) {
+    try {
+      const ids = highConfSuggestions.map(s => s.id)
+      await apiBatchConfirm(projectId.value, ids)
+      highConfSuggestions.forEach(s => {
+        s.status = 'confirmed'
+      })
+      ElMessage.success(`已自动确认 ${highConfSuggestions.length} 条高置信度建议`)
+    } catch (e) {
+      console.warn('批量确认高置信度建议失败:', e)
+    }
+  }
+}
+
+onMounted(async () => {
+  if (projectId.value) {
+    await fetchSuggestions()
+  }
 })
 </script>
 
@@ -567,6 +804,15 @@ onMounted(() => {
   &.level-high .conf-value { color: #059669; }
   &.level-medium .conf-value { color: #D97706; }
   &.level-low .conf-value { color: #DC2626; }
+
+  &.confidence-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F8FAFC;
+    border-radius: 50%;
+    border: 1px solid #E2E8F0;
+  }
 }
 
 .suggestion-main {
@@ -752,5 +998,76 @@ onMounted(() => {
 .batch-actions {
   display: flex;
   gap: 8px;
+}
+
+/* 全屏加载遮罩 */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 36px 48px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+}
+
+.loading-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #94A3B8;
+  transition: all 0.2s;
+}
+
+.loading-close-btn:hover {
+  background: #F1F5F9;
+  color: #EF4444;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #E2E8F0;
+  border-top-color: #3B82F6;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1E293B;
+  text-align: center;
+}
+
+.loading-progress {
+  display: flex;
+  align-items: center;
 }
 </style>

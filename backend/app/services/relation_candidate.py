@@ -61,17 +61,69 @@ def _extract_hint(column_name: str) -> str | None:
 
 
 def _table_name_matches_hint(table_name: str, hint: str) -> bool:
-    """Check whether a table name matches a column-name hint (singular/plural)."""
+    """Check whether a table name matches a column-name hint (singular/plural).
+
+    Supports exact, inflected, sub-string, and abbreviation matching:
+      user_id  -> users / user / user_infos
+      dept_id  -> department / departments (abbr prefix match)
+      tea_id   -> teacher / teachers      (abbr prefix match)
+      course_id -> course / courses
+    """
     tn = table_name.lower()
     h = hint.lower()
+    # 1. Exact / simple singular-plural.
     if tn == h or tn == h + "s" or tn == h + "es":
         return True
     if _singularize(tn) == h or _singularize(h) == tn:
         return True
-    # Handle compound hints like "product_sku" matching "product_skus".
+    # 2. Compound normalization.
     if tn.replace("_", "") == h.replace("_", "") + "s":
         return True
     if _singularize(tn).replace("_", "") == h.replace("_", ""):
+        return True
+    # 3. Sub-string containment (e.g. tea ≈ teacher, dept ≈ department).
+    #    Only accept when the hint is a *prefix* of the table name (or vice
+    #    versa), to avoid false positives like "id" matching everything.
+    if len(h) >= 3 and (tn.startswith(h) or h.startswith(tn)):
+        return True
+    # 4. Abbreviation: every character of hint appears in order in table name.
+    #    e.g. "dpt" -> "department", "tc" -> "teacher_course".
+    if len(h) >= 3 and _is_subsequence(h, tn):
+        return True
+    return False
+
+
+def _is_subsequence(short: str, long: str) -> bool:
+    """Return True if every character of `short` appears in `long` in order."""
+    idx = 0
+    for ch in long:
+        if ch == short[idx]:
+            idx += 1
+            if idx == len(short):
+                return True
+    return False
+
+
+def _target_column_matches_hint(column_name: str, hint: str) -> bool:
+    """Check that the target column name is plausibly a PK for the hint.
+
+    Accepts patterns like: id / tea_id / course_id / dept_id
+    Rejects columns like tc_id when the hint is "tea".
+    """
+    cn = column_name.lower()
+    h = hint.lower()
+    # Direct hit: column ends with _id or is exactly the hint + _id.
+    if cn == h or cn == h + "_id" or cn == h + "id":
+        return True
+    if cn.endswith("_" + h + "_id") or cn.endswith("_" + h + "id"):
+        return True
+    # The column name contains the hint as a sub-word (with _ delimiters).
+    # e.g. "tea" in "teacher_id" -> True, "tea" in "tc_id" -> False.
+    parts = set(cn.replace("-", "_").split("_"))
+    if h in parts:
+        return True
+    # Subsequence check with a stricter minimum length (>=4 chars).
+    if len(h) >= 4 and _is_subsequence(h, cn):
         return True
     return False
 
@@ -129,6 +181,13 @@ def generate_candidates(schema: ParsedSchema) -> list[CandidateRelation]:
                             target_cols.append((uc_name, uc_type, False))
 
                 for tcol_name, tcol_type, is_pk in target_cols:
+                    # Guard: when the target table match is fuzzy (sub-string /
+                    # abbreviation), skip target columns whose names do not
+                    # contain the hint. This prevents "tea_id -> tc_id" on a
+                    # table that merely happens to contain the letters "tea".
+                    if not _target_column_matches_hint(tcol_name, hint):
+                        continue
+
                     key = (
                         src_table.name.lower(),
                         col.name.lower(),
@@ -193,3 +252,51 @@ def candidate_to_dict(c: CandidateRelation) -> dict:
         "reason": c.reason,
         "type_match": c.type_match,
     }
+
+
+# Canonical forms written to storage / returned over API.
+# The UI should never see N:1 / many-to-one — N:1 is always flipped to 1:N
+# (swap source ↔ target) so cardinality notation is consistent and Crow's Foot
+# markers read naturally on the FK (many) side.
+_CARD_ALIASES = {
+    "1:1": "one-to-one",
+    "one-to-one": "one-to-one",
+    "1:n": "one-to-many",
+    "1:N": "one-to-many",
+    "one-to-many": "one-to-many",
+    "n:1": "many-to-one",
+    "N:1": "many-to-one",
+    "many-to-one": "many-to-one",
+    "n:n": "many-to-many",
+    "N:N": "many-to-many",
+    "many-to-many": "many-to-many",
+}
+
+
+def normalize_relationship_direction(
+    source_table: str,
+    source_column: str,
+    target_table: str,
+    target_column: str,
+    cardinality: str,
+) -> tuple[str, str, str, str, str]:
+    """Ensure cardinality never appears as many-to-one / N:1.
+
+    When the relationship is many-to-one (source=N, target=1), swap source and
+    target and rewrite cardinality to one-to-many. 1:1 and N:N pass through
+    unchanged.
+
+    Returns (source_table, source_column, target_table, target_column, cardinality)
+    using the canonical "one-to-many" / "one-to-one" / "many-to-many" strings.
+    """
+    canon = _CARD_ALIASES.get(str(cardinality or "").strip(), "one-to-many")
+    if canon == "many-to-one":
+        # swap endpoints so source becomes "one" (PK side) and target becomes "many" (FK side)
+        return (target_table, target_column, source_table, source_column, "one-to-many")
+    return (
+        str(source_table or ""),
+        str(source_column or ""),
+        str(target_table or ""),
+        str(target_column or ""),
+        canon,
+    )

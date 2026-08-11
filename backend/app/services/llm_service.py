@@ -224,11 +224,15 @@ SYSTEM_PROMPT = (
     "1. 只能输出给定 Schema 中真实存在的表和字段。\n"
     "2. 只能对提供的候选关系进行判断，不要凭空创造新的关系。\n"
     "3. 输出必须是合法的 JSON 数组，每个元素包含字段：source_table, source_column, "
-    "target_table, target_column, cardinality(可选值: many-to-one, one-to-many, "
-    "one-to-one, many-to-many), confidence(0-1 的浮点数), reason(字符串数组), "
+    "target_table, target_column, cardinality, confidence(0-1 的浮点数), reason(字符串数组), "
     "risks(字符串数组)。\n"
-    "4. confidence 表示你认为该关系成立的可信度，0.85 以上为高，0.60-0.84 为中，0.60 以下为低。\n"
-    "5. 不要输出任何 JSON 以外的文字。"
+    "4. cardinality 的可选值: many-to-one, one-to-many, one-to-one, many-to-many。\n"
+    "   重要：cardinality 的第一个值对应 source 表（源表）端，第二个值对应 target 表（目标表）端。\n"
+    "   - many-to-one 表示 source 端是多方（N），target 端是一方（1），即 source_table 有多条记录对应 target_table 的一条记录。\n"
+    "   - one-to-many 表示 source 端是一方（1），target 端是多方（N），即 source_table 的一条记录对应 target_table 的多条记录。\n"
+    "   - 通常，源表的 source_column 是外键（非主键）时，source 端是多方（many-to-one）。\n"
+    "5. confidence 表示你认为该关系成立的可信度，0.85 以上为高，0.60-0.84 为中，0.60 以下为低。\n"
+    "6. 不要输出任何 JSON 以外的文字。"
 )
 
 
@@ -316,6 +320,39 @@ def _validate_result(item: dict, schema: ParsedSchema, candidate_keys: set[tuple
     allowed = {"many-to-one", "one-to-many", "one-to-one", "many-to-many", "1:1", "1:N", "N:N"}
     if cardinality not in allowed:
         return err(f"cardinality 值非法: {cardinality}")
+
+    # Programmatic cardinality correction based on FK direction and UNIQUE constraints.
+    # source_column is the FK column (not PK), target_column is PK → default N:1 (many-to-one).
+    # BUT if source_column is additionally UNIQUE → each FK value can occur at most once,
+    # so the relationship is strictly 1:1 (e.g. teacher_info.tea_id → teacher.tea_id
+    # where teacher_info has a UNIQUE KEY on tea_id).
+    src_is_pk = bool(getattr(src_col_obj, "is_primary_key", False))
+    tgt_is_pk = bool(getattr(tgt_col_obj, "is_primary_key", False))
+    src_is_unique = bool(getattr(src_col_obj, "is_unique", False))
+
+    if not src_is_pk and tgt_is_pk:
+        # source has FK semantics pointing at a PK target.
+        if src_is_unique:
+            # FK column itself is UNIQUE → at most one source row per target row → 1:1
+            cardinality = "one-to-one"
+        else:
+            # Standard FK → source is "many", target is "one".
+            cardinality = "many-to-one"
+    elif src_is_pk and not tgt_is_pk:
+        # source is PK referencing FK → 1:N (one-to-many): source=one, target=many
+        cardinality = "one-to-many"
+    elif src_is_pk and tgt_is_pk:
+        # PK-to-PK shared → one-to-one
+        cardinality = "one-to-one"
+    else:
+        # Neither is PK (weak reference) — keep LLM's original judgment, but normalize aliases.
+        cardinality_aliases = {
+            "1:1": "one-to-one",
+            "1:N": "one-to-many",
+            "N:1": "many-to-one",
+            "N:N": "many-to-many",
+        }
+        cardinality = cardinality_aliases.get(cardinality.upper(), cardinality)
 
     return LLMRelationResult(
         source_table=s_table,

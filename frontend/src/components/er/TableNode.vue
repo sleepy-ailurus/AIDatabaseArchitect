@@ -1,18 +1,24 @@
 <template>
   <div class="table-node-wrap" :class="{ selected: selected }">
-    <!-- Top anchor points -->
-    <Handle
-      type="target"
-      :position="Position.Top"
-      id="top-target"
-      class="table-anchor top-anchor-left"
-    />
-    <Handle
-      type="source"
-      :position="Position.Top"
-      id="top-source"
-      class="table-anchor top-anchor-right"
-    />
+    <!-- Top anchor points (dynamic per index) -->
+    <template v-for="i in handleCounts.top.target" :key="'top-t-' + i">
+      <Handle
+        type="target"
+        :position="Position.Top"
+        :id="`top-target-${i - 1}`"
+        class="table-anchor"
+        :style="topHandleStyle(i - 1, handleCounts.top.target, 'target')"
+      />
+    </template>
+    <template v-for="i in handleCounts.top.source" :key="'top-s-' + i">
+      <Handle
+        type="source"
+        :position="Position.Top"
+        :id="`top-source-${i - 1}`"
+        class="table-anchor"
+        :style="topHandleStyle(i - 1, handleCounts.top.source, 'source')"
+      />
+    </template>
 
     <div class="node-header" :style="headerStyle">
       <div class="node-title">
@@ -80,47 +86,65 @@
       </div>
     </div>
 
-    <!-- Bottom anchor points -->
-    <Handle
-      type="target"
-      :position="Position.Bottom"
-      id="bottom-target"
-      class="table-anchor bottom-anchor-left"
-    />
-    <Handle
-      type="source"
-      :position="Position.Bottom"
-      id="bottom-source"
-      class="table-anchor bottom-anchor-right"
-    />
+    <!-- Bottom anchor points (dynamic per index) -->
+    <template v-for="i in handleCounts.bottom.target" :key="'bot-t-' + i">
+      <Handle
+        type="target"
+        :position="Position.Bottom"
+        :id="`bottom-target-${i - 1}`"
+        class="table-anchor"
+        :style="bottomHandleStyle(i - 1, handleCounts.bottom.target, 'target')"
+      />
+    </template>
+    <template v-for="i in handleCounts.bottom.source" :key="'bot-s-' + i">
+      <Handle
+        type="source"
+        :position="Position.Bottom"
+        :id="`bottom-source-${i - 1}`"
+        class="table-anchor"
+        :style="bottomHandleStyle(i - 1, handleCounts.bottom.source, 'source')"
+      />
+    </template>
 
-    <!-- Left anchor points -->
-    <Handle
-      type="target"
-      :position="Position.Left"
-      id="left-target"
-      class="table-anchor side-anchor left-target"
-    />
-    <Handle
-      type="source"
-      :position="Position.Left"
-      id="left-source"
-      class="table-anchor side-anchor left-source"
-    />
+    <!-- Left anchor points (dynamic per index) -->
+    <template v-for="i in handleCounts.left.target" :key="'left-t-' + i">
+      <Handle
+        type="target"
+        :position="Position.Left"
+        :id="`left-target-${i - 1}`"
+        class="table-anchor"
+        :style="leftHandleStyle(i - 1, handleCounts.left.target)"
+      />
+    </template>
+    <template v-for="i in handleCounts.left.source" :key="'left-s-' + i">
+      <Handle
+        type="source"
+        :position="Position.Left"
+        :id="`left-source-${i - 1}`"
+        class="table-anchor"
+        :style="leftHandleStyle(i - 1, handleCounts.left.source)"
+      />
+    </template>
 
-    <!-- Right anchor points -->
-    <Handle
-      type="target"
-      :position="Position.Right"
-      id="right-target"
-      class="table-anchor side-anchor right-target"
-    />
-    <Handle
-      type="source"
-      :position="Position.Right"
-      id="right-source"
-      class="table-anchor side-anchor right-source"
-    />
+    <!-- Right anchor points (dynamic per index) -->
+    <template v-for="i in handleCounts.right.target" :key="'right-t-' + i">
+      <Handle
+        type="target"
+        :position="Position.Right"
+        :id="`right-target-${i - 1}`"
+        class="table-anchor"
+        :style="rightHandleStyle(i - 1, handleCounts.right.target)"
+      />
+    </template>
+    <template v-for="i in handleCounts.right.source" :key="'right-s-' + i">
+      <Handle
+        type="source"
+        :position="Position.Right"
+        :id="`right-source-${i - 1}`"
+        class="table-anchor"
+        :style="rightHandleStyle(i - 1, handleCounts.right.source)"
+      />
+    </template>
   </div>
 </template>
 
@@ -141,8 +165,73 @@ const props = defineProps({
 const emit = defineEmits(['rename'])
 
 const nodeActions = inject('nodeActions', null)
+// Map<nodeId, { top:{source:N, target:N}, right:{...}, bottom:{...}, left:{...} }>
+const nodeHandleCounts = inject('nodeHandleCounts', new Map())
 
 const maxDisplay = 12
+
+// How many handles exist on each side/type for this node.
+// Fallback to at least 1 so users can still drag new connections from empty nodes.
+const handleCounts = computed(() => {
+  const counts = nodeHandleCounts?.get?.(String(props.id)) || null
+  const fallback = { source: 1, target: 1 }
+  return {
+    top: counts?.top || fallback,
+    right: counts?.right || fallback,
+    bottom: counts?.bottom || fallback,
+    left: counts?.left || fallback
+  }
+})
+
+// Vertical spacing step used between side handles (left/right)
+const V_STEP = 14 // px between consecutive handles on the same vertical side
+// Horizontal spacing step used between top/bottom handles
+const H_STEP = 18 // px between consecutive handles on the same horizontal side
+
+// Left/Right handles: spread vertically centered around 50%, offset by index
+const leftHandleStyle = (idx, total) => {
+  const n = Math.max(1, total)
+  // If total=1, center is 50%. Otherwise spread around center.
+  const baseOffset = n === 1 ? 0 : (idx - (n - 1) / 2) * V_STEP
+  return {
+    top: `calc(50% + ${baseOffset}px)`,
+    left: '0',
+    transform: 'translate(-50%, -50%)'
+  }
+}
+const rightHandleStyle = (idx, total) => {
+  const n = Math.max(1, total)
+  const baseOffset = n === 1 ? 0 : (idx - (n - 1) / 2) * V_STEP
+  return {
+    top: `calc(50% + ${baseOffset}px)`,
+    right: '0',
+    transform: 'translate(50%, -50%)'
+  }
+}
+// Top/Bottom handles: spread horizontally centered around 50%
+const topHandleStyle = (idx, total, kind) => {
+  const n = Math.max(1, total)
+  // kind target on left half, source on right half → combine into one center distribution
+  const combinedIdx = kind === 'target' ? idx : idx + 0.5
+  const totalShift = n === 1 ? 0 : (combinedIdx - (n - 1) / 2) * H_STEP
+  // Slight vertical offset so target handles sit slightly above source handles visually
+  const topPx = kind === 'target' ? 0 : 0
+  return {
+    left: `calc(50% + ${totalShift}px)`,
+    top: `${topPx}px`,
+    transform: 'translate(-50%, -50%)'
+  }
+}
+const bottomHandleStyle = (idx, total, kind) => {
+  const n = Math.max(1, total)
+  const combinedIdx = kind === 'target' ? idx : idx + 0.5
+  const totalShift = n === 1 ? 0 : (combinedIdx - (n - 1) / 2) * H_STEP
+  return {
+    left: `calc(50% + ${totalShift}px)`,
+    bottom: '-12px',
+    transform: 'translate(-50%, 50%)'
+  }
+}
 
 const editing = ref(false)
 const localName = ref('')

@@ -1,9 +1,9 @@
 """Analysis task router - orchestrates the AI relation-analysis workflow.
 
-Workflow:
-  pending -> parsing -> analyzing -> validating -> completed
-                                  --> failed
-                                  --> cancelled
+Workflow (LangGraph-backed, see app/services/workflow.py):
+  schema_load -> normalizer -> candidate_gen ->
+       [llm_agent | skip_llm] -> result_validator ->
+       confidence_classifier -> persist_suggestions -> END
 
 The analysis runs in a FastAPI background task so the create endpoint returns
 immediately with a pending task; the GET endpoint reports progress.
@@ -16,9 +16,8 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal, get_db
 from app.models import AnalysisTask, LLMConfig, Project, Relationship, SchemaSnapshot
 from app.schemas import AnalysisTaskCreate, AnalysisTaskOut
-from app.services.llm_service import LLMError, analyze_candidates, settings_from_config
-from app.services.relation_candidate import generate_candidates
-from app.services.schema_parser import schema_from_dict
+from app.services.llm_service import settings_from_config
+from app.services.workflow import run_analysis_workflow
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 
@@ -110,8 +109,22 @@ def get_latest_analysis(project_id: int, db: Session = Depends(get_db)):
     return task
 
 
+@router.post("/analysis-tasks/{task_id}/cancel", response_model=AnalysisTaskOut)
+def cancel_analysis_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.get(AnalysisTask, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="分析任务不存在")
+    if task.status in ("completed", "failed", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"任务已{task.status}，无法取消")
+    task.status = "cancelled"
+    task.error = "用户取消了分析任务"
+    db.commit()
+    db.refresh(task)
+    return task
+
+
 # ---------------------------------------------------------------------------
-# Background worker
+# Background worker (orchestrated via LangGraph)
 # ---------------------------------------------------------------------------
 def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_llm: bool) -> None:
     db = SessionLocal()
@@ -120,10 +133,30 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
         if not task:
             return
 
-        # --- parsing ---
         task.status = "parsing"
-        task.progress = 10
+        task.progress = 5
         db.commit()
+
+        # Clear old AI suggestions before starting a fresh analysis.
+        # Keep database constraints and user-created manual edges intact.
+        deleted = (
+            db.query(Relationship)
+            .filter(
+                Relationship.project_id == project_id,
+                Relationship.source_type == "ai_suggestion",
+            )
+            .delete(synchronize_session=False)
+        )
+        if deleted:
+            db.commit()
+
+        # Also clear saved ER model so the canvas rebuilds from fresh data.
+        from app.models import ERModel
+        models = db.query(ERModel).filter(ERModel.project_id == project_id).all()
+        for m in models:
+            m.model_data = None
+        if models:
+            db.commit()
 
         snapshot = (
             db.query(SchemaSnapshot)
@@ -137,14 +170,15 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
             db.commit()
             return
 
-        schema = schema_from_dict(snapshot.snapshot_data)
-
-        # --- analyzing (rule-based candidate generation) ---
-        task.status = "analyzing"
-        task.progress = 40
-        db.commit()
-
-        candidates = generate_candidates(schema)
+        llm_settings = None
+        if run_llm and llm_config_id:
+            llm_config = db.get(LLMConfig, llm_config_id)
+            if not llm_config:
+                task.status = "failed"
+                task.error = "LLM 配置不存在"
+                db.commit()
+                return
+            llm_settings = settings_from_config(llm_config)
 
         existing_keys = {
             (
@@ -155,115 +189,79 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
             )
             for r in db.query(Relationship).filter(Relationship.project_id == project_id).all()
         }
+        snapshot_data = snapshot.snapshot_data
 
-        suggestion_count = 0
+        # Close the long-living session before invoking the workflow; nodes
+        # create their own sessions via SessionLocal. This keeps the task-row
+        # updates isolated from relationship writes.
+        db.close()
 
-        if run_llm and llm_config_id:
-            llm_config = db.get(LLMConfig, llm_config_id)
-            if not llm_config:
-                task.status = "failed"
-                task.error = "LLM 配置不存在"
-                db.commit()
-                return
-
-            # --- validating (LLM analysis) ---
-            task.status = "validating"
-            task.progress = 70
-            db.commit()
-
+        def progress_cb(status: str, pct: int, error: str | None) -> None:
+            sdb = SessionLocal()
             try:
-                settings = settings_from_config(llm_config)
-                results = analyze_candidates(schema, candidates, settings)
-            except LLMError as exc:
-                task.status = "failed"
-                task.error = str(exc)
-                db.commit()
-                return
-            except Exception as exc:
-                task.status = "failed"
-                task.error = f"LLM 调用异常: {exc}"
-                db.commit()
-                return
+                t = sdb.get(AnalysisTask, task_id)
+                if not t:
+                    return
+                if t.status == "cancelled":
+                    sdb.close()
+                    raise RuntimeError("Task cancelled by user")
+                t.status = status or t.status
+                t.progress = pct
+                if error and status == "failed":
+                    t.error = error
+                sdb.commit()
+            finally:
+                sdb.close()
 
-            for res in results:
-                if not res.valid:
-                    continue
-                key = (
-                    res.source_table.lower(),
-                    res.source_column.lower(),
-                    res.target_table.lower(),
-                    res.target_column.lower(),
-                )
-                if key in existing_keys:
-                    continue
-                existing_keys.add(key)
-                reasons = list(res.reason) or []
-                if res.risks:
-                    reasons.append("风险: " + "; ".join(res.risks))
-                db.add(
-                    Relationship(
-                        project_id=project_id,
-                        source_table=res.source_table,
-                        source_column=res.source_column,
-                        target_table=res.target_table,
-                        target_column=res.target_column,
-                        cardinality=res.cardinality,
-                        confidence=res.confidence,
-                        source_type="ai_suggestion",
-                        status="suggested",
-                        reason=reasons,
-                    )
-                )
-                suggestion_count += 1
-        else:
-            # No LLM: persist rule-based candidates as ai_suggestion directly.
-            for cand in candidates:
-                key = (
-                    cand.source_table.lower(),
-                    cand.source_column.lower(),
-                    cand.target_table.lower(),
-                    cand.target_column.lower(),
-                )
-                if key in existing_keys:
-                    continue
-                existing_keys.add(key)
-                db.add(
-                    Relationship(
-                        project_id=project_id,
-                        source_table=cand.source_table,
-                        source_column=cand.source_column,
-                        target_table=cand.target_table,
-                        target_column=cand.target_column,
-                        cardinality=cand.cardinality,
-                        confidence=cand.confidence,
-                        source_type="ai_suggestion",
-                        status="suggested",
-                        reason=cand.reason,
-                    )
-                )
-                suggestion_count += 1
+        summary = run_analysis_workflow(
+            project_id=project_id,
+            snapshot_data=snapshot_data,
+            llm_settings=llm_settings,
+            run_llm=run_llm,
+            existing_keys=existing_keys,
+            db_session_factory=SessionLocal,
+            progress=progress_cb,
+        )
 
-        project = db.get(Project, project_id)
-        if project:
-            project.status = "analyzed"
-
-        task.status = "completed"
-        task.progress = 100
-        task.result = {
-            "candidate_count": len(candidates),
-            "suggestion_count": suggestion_count,
-            "used_llm": run_llm and llm_config_id is not None,
-        }
-        db.commit()
-    except Exception as exc:
-        db.rollback()
+        # Final status write.
+        sdb = SessionLocal()
         try:
-            task = db.get(AnalysisTask, task_id)
-            if task:
+            t = sdb.get(AnalysisTask, task_id)
+            if not t:
+                return
+            if summary.get("error"):
+                t.status = "failed"
+                t.error = summary["error"]
+                t.progress = t.progress or 0
+            else:
+                t.status = "completed"
+                t.progress = 100
+                t.error = None
+                t.result = {
+                    "candidate_count": summary.get("candidate_count", 0),
+                    "suggestion_count": summary.get("suggestion_count", 0),
+                    "used_llm": summary.get("used_llm", False),
+                    "node_log": summary.get("node_log") or [],
+                }
+                project = sdb.get(Project, project_id)
+                if project:
+                    project.status = "analyzed"
+            sdb.commit()
+        finally:
+            sdb.close()
+    except Exception as exc:
+        try:
+            sdb = SessionLocal()
+            task = sdb.get(AnalysisTask, task_id)
+            if task and task.status != "cancelled":
                 task.status = "failed"
                 task.error = f"分析任务异常: {exc}"
-                db.commit()
+                sdb.commit()
+        finally:
+            sdb.close()
+    finally:
+        # Best-effort cleanup: ensure the original session handle is closed.
+        try:
+            db.close()
         except Exception:
             pass
-    finally:
-        db.close()

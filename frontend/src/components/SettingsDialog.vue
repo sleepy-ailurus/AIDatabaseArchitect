@@ -51,24 +51,17 @@
             </div>
             <div class="config-row">
               <div class="config-info">
-                <div class="config-label">{{ t('settings.general.autoSave') }}</div>
-                <div class="config-desc">{{ t('settings.general.autoSaveDesc') }}</div>
-              </div>
-              <el-switch v-model="general.autoSave" />
-            </div>
-            <div class="config-row">
-              <div class="config-info">
                 <div class="config-label">{{ t('settings.general.showConfidence') }}</div>
                 <div class="config-desc">{{ t('settings.general.showConfidenceDesc') }}</div>
               </div>
-              <el-switch v-model="general.showConfidence" />
+              <el-switch v-model="settingsStore.showConfidence" />
             </div>
             <div class="config-row">
               <div class="config-info">
                 <div class="config-label">{{ t('settings.general.autoCheckHigh') }}</div>
                 <div class="config-desc">{{ t('settings.general.autoCheckHighDesc') }}</div>
               </div>
-              <el-switch v-model="general.autoCheckHigh" />
+              <el-switch v-model="settingsStore.autoCheckHigh" />
             </div>
           </div>
         </template>
@@ -346,7 +339,7 @@
           <div class="shortcut-list">
             <div v-for="s in shortcuts" :key="s.name" class="shortcut-row">
               <span class="s-name">{{ t(`settings.shortcuts.${s.key}`) }}</span>
-              <el-input v-model="s.keys" size="small" style="width: 200px;" />
+              <span class="shortcut-keys">{{ s.keys }}</span>
             </div>
           </div>
         </template>
@@ -444,7 +437,6 @@ const navItems = [
 const general = reactive({
   theme: 'auto',
   language: 'zh-CN',
-  autoSave: true,
   showConfidence: true,
   autoCheckHigh: true
 })
@@ -536,8 +528,10 @@ const loadConfigs = async () => {
     const data = await getLLMConfigs()
     const list = Array.isArray(data) ? data : (data?.items || data?.configs || [])
     providers.splice(0, providers.length, ...list.map(mapApiToProvider))
-    if (providers.length && activeProviderId.value === null) {
-      activeProviderId.value = providers[0].id
+    // 优先选中 is_default 的那条，没有就选第一条
+    if (providers.length) {
+      const def = providers.find(p => p.is_default) || providers[0]
+      activeProviderId.value = def.id
     }
   } catch (e) {
     ElMessage.error(t('llm.messages.loadFailed'))
@@ -550,8 +544,17 @@ const toggleExpand = (id) => {
   expandedId.value = expandedId.value === id ? null : id
 }
 
-const selectProvider = (provider) => {
+const selectProvider = async (provider) => {
   activeProviderId.value = provider.id
+  if (provider.is_default) return
+  if (provider._isNew || typeof provider.id !== 'number') return
+  try {
+    // 设为默认：后端 _unset_other_defaults 会清除其他的 is_default
+    await updateLLMConfig(provider.id, { is_default: true })
+    providers.forEach(p => { p.is_default = p.id === provider.id })
+  } catch (e) {
+    ElMessage.error(t('llm.messages.saveFailed'))
+  }
 }
 
 const toggleKeyVisibility = (id) => {
@@ -1627,6 +1630,17 @@ onMounted(() => {
     color: $text-regular;
     font-weight: 500;
   }
+
+  .shortcut-keys {
+    font-family: 'SF Mono', Consolas, Monaco, monospace;
+    font-size: 12px;
+    color: $text-primary;
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-weight: 500;
+  }
 }
 
 .about-section {
@@ -1705,6 +1719,11 @@ html.dark .settings-root {
   :deep(.config-desc) { color: #94a3b8; }
   :deep(.shortcut-row) { border-bottom-color: #3c3c3c; }
   :deep(.s-name) { color: #e2e8f0; }
+  :deep(.shortcut-keys) {
+    color: #e2e8f0;
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
   :deep(.settings-footer) {
     background: #252526;
     border-top-color: #3c3c3c;

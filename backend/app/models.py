@@ -247,3 +247,21 @@ class AnalysisTask(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class UserSettings(Base):
+    """Global user preferences stored as a single-row config table."""
+
+    __tablename__ = "user_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # UI preferences
+    theme: Mapped[str] = mapped_column(String(32), nullable=False, default="auto")
+    language: Mapped[str] = mapped_column(String(32), nullable=False, default="zh-CN")
+    # AI analysis preferences
+    show_confidence: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    auto_check_high: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )

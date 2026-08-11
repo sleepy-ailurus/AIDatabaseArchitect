@@ -153,7 +153,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
 import { useProjectStore } from '@/stores/project'
 import { createProject as createProjectApi, deleteProject as deleteProjectApi } from '@/api/project'
 import { getVersions, getVersion, saveERModel, deleteVersion } from '@/api/erModel'
@@ -161,7 +160,6 @@ import { useDataI18n } from '@/i18n'
 
 const { t, locale } = useI18n()
 const { tData } = useDataI18n()
-dayjs.extend(relativeTime)
 
 const router = useRouter()
 const projectStore = useProjectStore()

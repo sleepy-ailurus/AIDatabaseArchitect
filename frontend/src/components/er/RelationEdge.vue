@@ -148,19 +148,24 @@ onUnmounted(() => {
 const sourceType = computed(() => props.data?.sourceType || 'database')
 
 const edgeColor = computed(() => {
+  // Only two visual categories now:
+  //   - database constraint / explicit FK → blue
+  //   - everything else (manual created, AI suggestion confirmed) → green
+  //   - "suggested" (not yet approved) AI relationships are filtered out
+  //     before reaching this component, so we never draw yellow dashed lines.
   const lightMap = {
     database: '#3B82F6',
     database_constraint: '#3B82F6',
-    ai: '#F59E0B',
-    ai_suggestion: '#F59E0B',
+    ai: '#10B981',
+    ai_suggestion: '#10B981',
     ai_confirmed: '#10B981',
     manual: '#10B981'
   }
   const darkMap = {
     database: '#60a5fa',
     database_constraint: '#60a5fa',
-    ai: '#FBBF24',
-    ai_suggestion: '#FBBF24',
+    ai: '#34D399',
+    ai_suggestion: '#34D399',
     ai_confirmed: '#34D399',
     manual: '#34D399'
   }
@@ -169,8 +174,8 @@ const edgeColor = computed(() => {
 })
 
 const isDashed = computed(() => {
-  const t = sourceType.value
-  return t === 'ai' || t === 'ai_suggestion'
+  // All visible lines are solid — suggested AI lines are filtered upstream.
+  return false
 })
 
 const cardinality = computed(() => props.data?.cardinality || '1:N')
@@ -188,8 +193,9 @@ const endMarkerType = computed(() => {
 })
 
 const showLabel = computed(() => {
-  const conf = props.data?.confidence
-  return conf !== undefined && conf < 1
+  // Confidence badges removed from the canvas — only the database FK name
+  // should be overlaid on a line when applicable.
+  return false
 })
 
 const constraintName = computed(() => props.data?.constraintName || '')

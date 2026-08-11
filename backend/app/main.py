@@ -21,6 +21,7 @@ from app.routers import (
     projects,
     relationships,
     schema,
+    user_settings,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -61,3 +62,4 @@ app.include_router(er_models.router)
 app.include_router(llm_configs.router)
 app.include_router(exports.router)
 app.include_router(analysis.router)
+app.include_router(user_settings.router)

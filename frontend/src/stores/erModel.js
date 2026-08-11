@@ -135,31 +135,111 @@ export const useErModelStore = defineStore('erModel', () => {
       if (byName) return String(byName.id)
       return String(name)
     }
-
-    const normalizeCardinality = (card) => {
-      const c = String(card || '1:N').toLowerCase()
-      if (c === 'one-to-one' || c === '1:1') return '1:1'
-      if (c === 'one-to-many' || c === '1:n') return '1:N'
-      // Treat many-to-one (N:1) as one-to-many (1:N) since they are inverse relationships
-      if (c === 'many-to-one' || c === 'n:1') return '1:N'
-      if (c === 'many-to-many' || c === 'n:n') return 'N:N'
-      return '1:N'
+    const resolveNode = (name) => {
+      if (!name) return null
+      const byId = nodeById.get(String(name))
+      if (byId) return byId
+      const byName = nodeByName.get(name)
+      return byName || null
     }
 
-    return relationships.map((r, idx) => {
+    // Parse cardinality into canonical form, flipping N:1 -> 1:N by swapping endpoints.
+    // Never returns N:1 — the UI only ever shows 1:1, 1:N, N:N.
+    const normalizeRelationship = (r) => {
+      const raw = String(r.cardinality || '1:N').toLowerCase()
+      let src = r.source_table || r.from_table
+      let srcCol = r.source_column || r.from_column || ''
+      let tgt = r.target_table || r.to_table
+      let tgtCol = r.target_column || r.to_column || ''
+      let card = '1:N'
+      if (raw === 'one-to-one' || raw === '1:1') {
+        card = '1:1'
+      } else if (raw === 'many-to-many' || raw === 'n:n') {
+        card = 'N:N'
+      } else if (raw === 'many-to-one' || raw === 'n:1') {
+        // N:1 → flip endpoints so cardinality becomes 1:N (one PK side → many FK side)
+        const [tmp, tmpCol] = [src, srcCol]
+        src = tgt; srcCol = tgtCol
+        tgt = tmp; tgtCol = tmpCol
+        card = '1:N'
+      } else {
+        // one-to-many / 1:n / unknown → 1:N
+        card = '1:N'
+      }
+      return { src, srcCol, tgt, tgtCol, card }
+    }
+
+    // 1) Pre-normalize every relationship (swap endpoints for N:1)
+    const normalized = relationships.map((r, idx) => {
+      const { src, srcCol, tgt, tgtCol, card } = normalizeRelationship(r)
       return {
-        id: String(r.id ?? `e${idx}`),
-        source: resolveNodeId(r.source_table || r.from_table),
-        target: resolveNodeId(r.target_table || r.to_table),
-        sourceHandle: 'right-source',
-        targetHandle: 'left-target',
+        rawRel: r,
+        idx,
+        src, srcCol, tgt, tgtCol, card
+      }
+    })
+
+    // 2) Choose handle side (right/left/top/bottom) for each edge based on node layout,
+    //    then bucket edges by (nodeId, side, isSource) so each bucket gets a unique index.
+    //    This guarantees "one anchor → one edge" (no two edges share the exact handle id).
+    const chooseSides = (srcNode, tgtNode) => {
+      if (!srcNode || !tgtNode) return { srcSide: 'right', tgtSide: 'left' }
+      const sx = srcNode.position?.x ?? 0
+      const sy = srcNode.position?.y ?? 0
+      const tx = tgtNode.position?.x ?? 0
+      const ty = tgtNode.position?.y ?? 0
+      const dx = tx - sx
+      const dy = ty - sy
+      if (Math.abs(dy) > Math.abs(dx)) {
+        return dy > 0
+          ? { srcSide: 'bottom', tgtSide: 'top' }
+          : { srcSide: 'top', tgtSide: 'bottom' }
+      }
+      return dx > 0
+        ? { srcSide: 'right', tgtSide: 'left' }
+        : { srcSide: 'left', tgtSide: 'right' }
+    }
+
+    // First pass: assign sides + build bucket counts
+    const edgeAssignments = []
+    const bucketCounter = new Map() // key = `${nodeId}|${side}|${src|tgt}` → count
+    for (const item of normalized) {
+      const srcNode = resolveNode(item.src)
+      const tgtNode = resolveNode(item.tgt)
+      const { srcSide, tgtSide } = chooseSides(srcNode, tgtNode)
+      const srcId = resolveNodeId(item.src)
+      const tgtId = resolveNodeId(item.tgt)
+
+      const srcBucket = `${srcId}|${srcSide}|src`
+      const tgtBucket = `${tgtId}|${tgtSide}|tgt`
+      const srcIdx = bucketCounter.get(srcBucket) ?? 0
+      const tgtIdx = bucketCounter.get(tgtBucket) ?? 0
+      bucketCounter.set(srcBucket, srcIdx + 1)
+      bucketCounter.set(tgtBucket, tgtIdx + 1)
+
+      edgeAssignments.push({
+        ...item,
+        srcId, tgtId, srcSide, tgtSide, srcIdx, tgtIdx
+      })
+    }
+
+    // 3) Build final edges with unique sourceHandle/targetHandle ids.
+    //    Handle id format: `${side}-${src|tgt}-${index}` — matches TableNode dynamic handles.
+    return edgeAssignments.map((a) => {
+      const r = a.rawRel
+      return {
+        id: String(r.id ?? `e${a.idx}`),
+        source: a.srcId,
+        target: a.tgtId,
+        sourceHandle: `${a.srcSide}-source-${a.srcIdx}`,
+        targetHandle: `${a.tgtSide}-target-${a.tgtIdx}`,
         type: 'relationEdge',
         data: {
-          cardinality: normalizeCardinality(r.cardinality),
+          cardinality: a.card,
           sourceType: r.source_type || r.type || 'database',
           confidence: r.confidence ?? 1,
-          fromColumn: r.source_column || r.from_column || null,
-          toColumn: r.target_column || r.to_column || null,
+          fromColumn: a.srcCol || null,
+          toColumn: a.tgtCol || null,
           constraintName: r.constraint_name || null,
           reason: r.reason || []
         }

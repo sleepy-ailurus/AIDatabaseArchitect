@@ -15,3 +15,7 @@ export function getAnalysisList(projectId, params) {
 export function getLatestAnalysis(projectId) {
   return request.get(`/projects/${projectId}/analysis-tasks/latest`)
 }
+
+export function cancelAnalysisTask(taskId) {
+  return request.post(`/analysis-tasks/${taskId}/cancel`)
+}

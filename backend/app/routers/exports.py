@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import DocumentExport, Project, Relationship, SchemaSnapshot, SchemaTable
 from app.schemas import ExportCreate, ExportOut
 from app.services.markdown_export import generate_markdown
+from app.services.relation_candidate import normalize_relationship_direction
 from app.services.schema_parser import ParsedColumn, ParsedSchema, ParsedTable
 
 router = APIRouter(prefix="/api", tags=["exports"])
@@ -58,13 +59,20 @@ def _snapshot_constraint_relationships(snapshot: SchemaSnapshot) -> list[dict]:
             target_column = fk.get("target_column")
             if not (source_table and source_column and target_table and target_column):
                 continue
+            st, sc, tt, tc, card = normalize_relationship_direction(
+                source_table,
+                source_column,
+                target_table,
+                target_column,
+                "many-to-one",
+            )
             relationships.append(
                 {
-                    "source_table": source_table,
-                    "source_column": source_column,
-                    "target_table": target_table,
-                    "target_column": target_column,
-                    "cardinality": "many-to-one",
+                    "source_table": st,
+                    "source_column": sc,
+                    "target_table": tt,
+                    "target_column": tc,
+                    "cardinality": card,
                     "confidence": 1.0,
                     "source_type": "database_constraint",
                     "status": "confirmed",

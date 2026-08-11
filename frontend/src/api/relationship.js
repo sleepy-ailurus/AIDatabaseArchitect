@@ -23,3 +23,19 @@ export function confirmSuggestion(id) {
 export function rejectSuggestion(id) {
   return request.post(`/relationships/${id}/reject`)
 }
+
+export function resetSuggestion(id) {
+  return request.post(`/relationships/${id}/reset`)
+}
+
+export function batchConfirmSuggestions(projectId, ids) {
+  return request.post(`/projects/${projectId}/relationships/batch-confirm`, {
+    relationship_ids: Array.isArray(ids) ? ids : []
+  })
+}
+
+export function batchRejectSuggestions(projectId, ids) {
+  return request.post(`/projects/${projectId}/relationships/batch-reject`, {
+    relationship_ids: Array.isArray(ids) ? ids : []
+  })
+}

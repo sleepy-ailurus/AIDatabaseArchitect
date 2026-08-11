@@ -347,3 +347,23 @@ class ExportOut(ORMModel):
     format: str
     content: str
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# User settings
+# ---------------------------------------------------------------------------
+class UserSettingsUpdate(BaseModel):
+    theme: str | None = None
+    language: str | None = None
+    show_confidence: bool | None = None
+    auto_check_high: bool | None = None
+
+
+class UserSettingsOut(ORMModel):
+    id: int
+    theme: str
+    language: str
+    show_confidence: bool
+    auto_check_high: bool
+    created_at: datetime
+    updated_at: datetime

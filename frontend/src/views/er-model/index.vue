@@ -158,7 +158,6 @@
 
         <div class="legend-bar">
           <div class="legend-item"><span class="legend-dot confirmed"></span> {{ t('erModel.legend.confirmed') }}</div>
-          <div class="legend-item"><span class="legend-dot ai"></span> {{ t('erModel.legend.ai') }}</div>
           <div class="legend-item"><span class="legend-dot manual"></span> {{ t('erModel.legend.manual') }}</div>
           <div class="legend-item"><span class="legend-key">🔑</span> {{ t('erModel.legend.pk') }}</div>
           <div class="legend-item"><span class="legend-key">🔗</span> {{ t('erModel.legend.fk') }}</div>
@@ -219,25 +218,20 @@
               <div v-for="r in nodeRelations" :key="r.id" class="rel-card" :class="r.data?.sourceType">
                 <div class="rel-head">
                   <span class="rel-type">{{ r.data?.cardinality || '1:N' }}</span>
-                  <el-tag
-                    v-if="r.data?.confidence !== undefined && r.data.confidence < 1"
-                    size="small"
-                    :class="getConfidenceClass(r.data.confidence)"
-                    effect="light"
-                  >
-                    {{ t('erModel.detail.confidence') }} {{ (r.data.confidence * 100).toFixed(0) }}%
-                  </el-tag>
                 </div>
                 <div class="rel-cols">
                   <code>{{ r.source === selectedNode.id ? (r.data?.fromColumn || '?') : (r.data?.toColumn || '?') }}</code>
                   →
                   <code>{{ r.source === selectedNode.id ? getTargetName(r.target) : getSourceName(r.source) }}</code>
                 </div>
-                <div class="rel-tag-row" v-if="r.data?.sourceType === 'ai_suggestion' || r.data?.sourceType === 'ai'">
-                  <el-tag size="small" type="warning" effect="light"><el-icon><MagicStick /></el-icon> {{ t('erModel.detail.aiInferred') }}</el-tag>
+                <div class="rel-tag-row" v-if="r.data?.sourceType === 'ai_suggestion' || r.data?.sourceType === 'ai' || r.data?.sourceType === 'ai_confirmed'">
+                  <el-tag size="small" type="success" effect="light"><el-icon><MagicStick /></el-icon> AI 建议</el-tag>
                 </div>
                 <div class="rel-tag-row" v-else-if="r.data?.sourceType === 'manual'">
                   <el-tag size="small" type="success" effect="light">{{ t('erModel.detail.manualCreated') }}</el-tag>
+                </div>
+                <div class="rel-tag-row" v-else-if="r.data?.sourceType === 'database' || r.data?.sourceType === 'database_constraint'">
+                  <el-tag size="small" type="primary" effect="light">{{ t('erModel.sourceTypes.database_constraint') || t('erModel.sourceTypes.database') }}</el-tag>
                 </div>
               </div>
               <el-empty v-if="nodeRelations.length === 0" :description="t('erModel.detail.noRelations')" :image-size="60" />
@@ -264,7 +258,11 @@
         <div class="edge-detail-body">
           <el-form :label-width="edgeLabelWidth" size="small">
             <el-form-item :label="t('erModel.detail.cardinality')">
-              <el-select v-model="selectedEdge.data.cardinality" style="width: 100%;">
+              <el-select
+                v-model="selectedEdge.data.cardinality"
+                style="width: 100%;"
+                @change="onCardinalityChange"
+              >
                 <el-option :label="t('erModel.cardinalityOptions.oneToOne')" value="1:1" />
                 <el-option :label="t('erModel.cardinalityOptions.oneToMany')" value="1:N" />
                 <el-option :label="t('erModel.cardinalityOptions.manyToMany')" value="N:N" />
@@ -450,7 +448,7 @@ import RelationEdge from '@/components/er/RelationEdge.vue'
 import { useErModelStore } from '@/stores/erModel'
 import { useProjectStore } from '@/stores/project'
 import { getTables } from '@/api/schema'
-import { getRelationships, createRelationship, deleteRelationship } from '@/api/relationship'
+import { getRelationships, createRelationship, deleteRelationship, updateRelationship } from '@/api/relationship'
 import { useDataI18n } from '@/i18n'
 import { registerShortcut, unregisterShortcut } from '@/utils/shortcuts'
 
@@ -539,6 +537,41 @@ const filteredNodes = computed(() => {
   return nodes.value.filter(n => (n.data.name || '').toLowerCase().includes(sidebarSearchTable.value.toLowerCase()))
 })
 
+// Compute how many source/target handles exist on each side (top/right/bottom/left) per node.
+// This is provided to TableNode so it can render exactly the right number of anchor points,
+// each with a unique position — guaranteeing "one anchor → one edge" (no overlap).
+const _zeroSide = () => ({ source: 0, target: 0 })
+const _zeroNode = () => ({ top: _zeroSide(), right: _zeroSide(), bottom: _zeroSide(), left: _zeroSide() })
+const nodeHandleCounts = computed(() => {
+  const map = new Map()
+  const ensure = (nid) => {
+    if (!map.has(nid)) map.set(nid, _zeroNode())
+    return map.get(nid)
+  }
+  // Always ensure every known node has an entry (so fallback counts render at least 1 fallback handle)
+  for (const n of nodes.value) ensure(String(n.id))
+
+  for (const e of edges.value) {
+    const sm = /^(top|right|bottom|left)-(source|target)(?:-(\d+))?$/.exec(e.sourceHandle || '')
+    if (sm) {
+      const node = ensure(String(e.source))
+      const side = sm[1]
+      const kind = sm[2]
+      const idx = Number(sm[3] ?? 0)
+      node[side][kind] = Math.max(node[side][kind], idx + 1)
+    }
+    const tm = /^(top|right|bottom|left)-(source|target)(?:-(\d+))?$/.exec(e.targetHandle || '')
+    if (tm) {
+      const node = ensure(String(e.target))
+      const side = tm[1]
+      const kind = tm[2]
+      const idx = Number(tm[3] ?? 0)
+      node[side][kind] = Math.max(node[side][kind], idx + 1)
+    }
+  }
+  return map
+})
+
 const onSearchEnter = () => {
   const q = searchTable.value.trim()
   if (!q) return
@@ -599,8 +632,8 @@ const getSourceTagType = (t) => {
   const map = {
     database: 'primary',
     database_constraint: 'primary',
-    ai: 'warning',
-    ai_suggestion: 'warning',
+    ai: 'success',
+    ai_suggestion: 'success',
     ai_confirmed: 'success',
     manual: 'success'
   }
@@ -773,6 +806,102 @@ const deleteEdge = async (id) => {
   selectedEdgeId.value = null
 }
 
+// Map UI cardinality values (used in v-model and RelationEdge) to backend canonical enum.
+// Pull-down dropdown only ever produces 1:1 / 1:N / N:N — never N:1, which the backend
+// normalizer would otherwise flip endpoints for. So source/target endpoints are stable
+// across every change the user makes in the drawer; we only need to mutate the cardinality
+// string on the existing edge to keep crow-feet markers, node handles and anchor positions stable.
+const UI_TO_BACKEND_CARD = {
+  '1:1': 'one-to-one',
+  '1:N': 'one-to-many',
+  'N:N': 'many-to-many'
+}
+const BACKEND_TO_UI_CARD = {
+  'one-to-one': '1:1',
+  'one-to-many': '1:N',
+  'many-to-many': 'N:N',
+  'many-to-one': '1:N'
+}
+
+const onCardinalityChange = async (newUiCard) => {
+  // Called when user picks a different cardinality from the edge-detail drawer select.
+  // Persists via PATCH /relationships/{id}; on success, rewrites the canonical server-
+  // truth cardinality (UI form) back onto the SAME edge object so Vue reactivity triggers
+  // RelationEdge marker re-computation, WITHOUT rebuilding endpoints / handles (which
+  // would assign wrong bucket indices when only a single edge is re-normalized).
+  const edge = selectedEdge.value
+  if (!edge) return
+  const relId = edge.id
+  const backendCard = UI_TO_BACKEND_CARD[newUiCard]
+  if (!backendCard) {
+    ElMessage.warning(`Unknown cardinality: ${newUiCard}`)
+    return
+  }
+  try {
+    const updated = await updateRelationship(relId, { cardinality: backendCard })
+    // Translate server's canonical enum back into the 1:1/1:N/N:N format that every
+    // RelationEdge computed uses to split start/end markers.
+    const serverUiCard = BACKEND_TO_UI_CARD[String(updated.cardinality || '').toLowerCase()] || newUiCard
+
+    // Update the edge IN PLACE, preserving source/target/handles/id so anchors and
+    // TableNode handle counts don't desync. Mutating a nested property still triggers
+    // RelationEdge because its `cardinality` computed tracks props.data.cardinality.
+    // We also fully replace the edges.value[i] element to guarantee reactivity for any
+    // consumer that compares edge objects by identity.
+    const idx = edges.value.findIndex(e => String(e.id) === String(relId))
+    if (idx >= 0) {
+      const cur = edges.value[idx]
+      edges.value[idx] = {
+        ...cur,
+        data: {
+          ...(cur.data || {}),
+          cardinality: serverUiCard
+        }
+      }
+      // Vue Flow keeps internal identity caches keyed on the array reference as well
+      // as on per-item identity; replacing just the element at index N is often not
+      // enough after the 2nd+ change (the shallow cache returns the stale vnode).
+      // Swapping the entire edges array for a fresh shallow copy forces VueFlow's
+      // v-for to diff against a new array identity so every affected edge re-renders
+      // and crow-foot markers flip correctly regardless of change count.
+      edges.value = [...edges.value]
+    }
+    // If v-model wrote a "best-effort" value before the server round-trip, force it to
+    // exactly the server value so the select shows canonical choice.
+    if (selectedEdge.value?.data) {
+      selectedEdge.value.data.cardinality = serverUiCard
+    }
+    ElMessage.success(t('erModel.messages.relationUpdated'))
+  } catch (err) {
+    // Revert the optimistic v-model change by re-reading current truth from the server
+    // and writing it back to the edge object so the UI matches what is actually stored.
+    try {
+      const rels = await getRelationships(projectId)
+      const list = Array.isArray(rels) ? rels : (rels?.items || rels?.relationships || [])
+      const latest = list.find(r => String(r.id) === String(relId))
+      if (latest && edge?.data) {
+        const revertUi = BACKEND_TO_UI_CARD[String(latest.cardinality || '').toLowerCase()] || '1:N'
+        const idx = edges.value.findIndex(e => String(e.id) === String(relId))
+        if (idx >= 0) {
+          const cur = edges.value[idx]
+          edges.value[idx] = {
+            ...cur,
+            data: { ...(cur.data || {}), cardinality: revertUi }
+          }
+          // Same reasoning as success path — force a new array identity so Vue Flow
+          // invalidates its cached edge vnodes on rollback too.
+          edges.value = [...edges.value]
+        }
+        if (selectedEdge.value?.data) {
+          selectedEdge.value.data.cardinality = revertUi
+        }
+      }
+    } catch {
+      /* ignore revert error */
+    }
+  }
+}
+
 const editColumn = (idx) => {
   if (!selectedNode.value) return
   const col = selectedNode.value.data.columns[idx]
@@ -813,6 +942,8 @@ provide('nodeActions', {
   deleteNode,
   openAddColumn
 })
+// Provide handle counts so TableNode components can render the right number of anchor points
+provide('nodeHandleCounts', nodeHandleCounts)
 
 const saveNewColumn = () => {
   if (!addColForm.name.trim()) {
@@ -898,34 +1029,46 @@ const autoLayout = () => {
     }
   })
 
-  edges.value = edges.value.map(edge => {
+  // First pass: choose sides per edge, then bucket edges by (nodeId, side, src|tgt)
+  // to assign a unique index per bucket — guarantee "one anchor → one edge".
+  const firstPass = []
+  const bucketCounter = new Map()
+  edges.value.forEach(edge => {
     const sourceNode = vueNodes.find(n => String(n.id) === String(edge.source))
     const targetNode = vueNodes.find(n => String(n.id) === String(edge.target))
-    if (!sourceNode || !targetNode) return edge
-
+    if (!sourceNode || !targetNode) {
+      firstPass.push({ edge, srcSide: null, tgtSide: null })
+      return
+    }
     const sx = sourceNode.position.x + (sourceNode.dimensions?.width || sourceNode.width || 240) / 2
     const sy = sourceNode.position.y + (sourceNode.dimensions?.height || sourceNode.height || 200) / 2
     const tx = targetNode.position.x + (targetNode.dimensions?.width || targetNode.width || 240) / 2
     const ty = targetNode.position.y + (targetNode.dimensions?.height || targetNode.height || 200) / 2
-
     const dx = tx - sx
     const dy = ty - sy
-
-    let sourceHandle = 'right-source'
-    let targetHandle = 'left-target'
-
+    let srcSide, tgtSide
     if (Math.abs(dy) > Math.abs(dx)) {
-      sourceHandle = dy > 0 ? 'bottom-source' : 'top-source'
-      targetHandle = dy > 0 ? 'top-target' : 'bottom-target'
+      if (dy > 0) { srcSide = 'bottom'; tgtSide = 'top' }
+      else { srcSide = 'top'; tgtSide = 'bottom' }
     } else {
-      sourceHandle = dx > 0 ? 'right-source' : 'left-source'
-      targetHandle = dx > 0 ? 'left-target' : 'right-target'
+      if (dx > 0) { srcSide = 'right'; tgtSide = 'left' }
+      else { srcSide = 'left'; tgtSide = 'right' }
     }
+    const srcBucket = `${String(edge.source)}|${srcSide}|src`
+    const tgtBucket = `${String(edge.target)}|${tgtSide}|tgt`
+    const srcIdx = bucketCounter.get(srcBucket) ?? 0
+    const tgtIdx = bucketCounter.get(tgtBucket) ?? 0
+    bucketCounter.set(srcBucket, srcIdx + 1)
+    bucketCounter.set(tgtBucket, tgtIdx + 1)
+    firstPass.push({ edge, srcSide, tgtSide, srcIdx, tgtIdx })
+  })
 
+  edges.value = firstPass.map(({ edge, srcSide, tgtSide, srcIdx, tgtIdx }) => {
+    if (!srcSide || !tgtSide) return edge
     return {
       ...edge,
-      sourceHandle,
-      targetHandle
+      sourceHandle: `${srcSide}-source-${srcIdx}`,
+      targetHandle: `${tgtSide}-target-${tgtIdx}`
     }
   })
 
@@ -1053,7 +1196,12 @@ const loadModel = async () => {
         getRelationships(projectId)
       ])
       const tables = normalizeList(tablesData)
-      const rels = normalizeList(relsData).filter(r => r.status !== 'rejected')
+      // Only visualize relationships the user has committed (confirmed/manual) —
+      // AI suggestions with status=suggested are intentionally hidden until the
+      // user approves them in the AI review drawer (router /ai-suggestions).
+      // Explicit database foreign keys always land with status=confirmed (see
+      // schema.py relationship persistence) so they are always drawn.
+      const rels = normalizeList(relsData).filter(r => r.status === 'confirmed')
       buildFromSchema(tables, rels)
     } catch {
       // 还没有 schema 数据
@@ -1061,13 +1209,15 @@ const loadModel = async () => {
   }
 
   // 3) 始终用最新的关系数据补齐边：
-  //    - 显式外键(database_constraint)、已确认、手动、AI 建议都应显示；
-  //    - 被用户“拒绝/删除”的关系不在库中，不会重新出现；
+  //    - 显式外键(database_constraint status=confirmed)、已确认(confirmed)、手动创建(manual) 显示；
+  //    - 被用户“拒绝/删除”的关系和未确认的AI建议(suggested)不在画布上出现，
+  //      前者被彻底排除，后者留在审核页等待用户批准后再进入画布；
   //    - 已存在的边（含用户在编辑器中的修改）优先保留，避免覆盖；
   //    - 对已有边合并最新关系元数据（如 constraintName），避免已保存模型里缺少字段。
   try {
     const relsData = await getRelationships(projectId)
-    const rels = normalizeList(relsData).filter(r => r.status !== 'rejected')
+    const rels = normalizeList(relsData).filter(r => r.status === 'confirmed')
+    const confirmedIds = new Set(rels.map(r => String(r.id)))
     const relEdges = erModelStore.buildEdges(rels).map(normalizeEdge)
     const edgeMap = new Map()
     const norm = (v) => (v == null ? '' : String(v))
@@ -1087,7 +1237,6 @@ const loadModel = async () => {
     }
     for (const e of relEdges) {
       let existing = edgeMap.get(e.id) || edgeByKey.get(edgeKey(e))
-      // 宽松匹配：同表对且缺少 constraintName 的边
       if (!existing) {
         const candidates = edgeByPair.get(pairKey(e)) || []
         existing = candidates.find(c => !c.data?.constraintName)
@@ -1112,7 +1261,10 @@ const loadModel = async () => {
         edgeByPair.get(pk).push(e)
       }
     }
-    edges.value = [...edgeMap.values()]
+    edges.value = [...edgeMap.values()].filter(e => {
+      const id = String(e.id)
+      return confirmedIds.has(id) || id.startsWith('e-')
+    })
   } catch (err) {
     console.error('补齐关系边失败', err)
   }
@@ -1124,7 +1276,10 @@ const loadModel = async () => {
       getRelationships(projectId)
     ])
     const tables = normalizeList(tablesData)
-    const rels = normalizeList(relsData).filter(r => r.status !== 'rejected')
+    // Confirmed + manual relationships are enough to correctly light up the
+    // FK flags on columns; suggested (unapproved AI) relationships are omitted
+    // from the canvas so their columns should not get the blue FK badge either.
+    const rels = normalizeList(relsData).filter(r => r.status === 'confirmed')
     const repaired = erModelStore.repairNodeKeyFlags(nodes.value, tables, rels)
     nodes.value = repaired
   } catch {
@@ -1634,11 +1789,8 @@ onBeforeUnmount(() => {
     margin-bottom: 10px;
 
     &.ai_suggestion,
-    &.ai {
-      border-color: rgba(245, 158, 11, 0.3);
-      background: rgba(245, 158, 11, 0.03);
-    }
-
+    &.ai,
+    &.ai_confirmed,
     &.manual {
       border-color: rgba(16, 185, 129, 0.3);
       background: rgba(16, 185, 129, 0.03);
@@ -1689,24 +1841,63 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow: auto;
   padding: 20px;
+  // Extra right padding so long wrapped reason text doesn't brush against the
+  // drawer scroll-bar / right edge. Box-sizing ensures the padding is inside.
+  padding-right: 28px;
+  box-sizing: border-box;
 
   .reason-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+    // Guarantee the list shrinks so its children can honor the drawer width
+    // and wrap to a second line instead of overflowing the right border.
+    min-width: 0;
+    width: 100%;
   }
 
   .reason-item {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    // Icon stays pinned to the first line's top; wrapped text flows under.
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 8px;
     font-size: 12px;
     color: $text-regular;
-    line-height: 1.5;
+    line-height: 1.55;
     flex-wrap: nowrap;
+    width: 100%;
+    min-width: 0;
+    // Add its own small right breathing room as a belt-and-suspenders safety net.
+    padding-right: 4px;
+    box-sizing: border-box;
+
+    .el-icon {
+      // Keep the check icon aligned with the middle of the first line of text
+      // even when the line wraps to a second row.
+      flex-shrink: 0;
+      // Was 2px; nudged down so the tick sits on the same optical baseline
+      // as 12px reason text (font-size 12px + line-height 1.55 ≈ 18.6px row).
+      margin-top: 5px;
+    }
 
     span {
-      white-space: nowrap;
+      // Allow the reason sentence to wrap anywhere (including mid-word for long
+      // column/table names like teacher_course_semester_uk_idx) and fall back
+      // to a second line instead of overflowing the drawer boundary.
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      // Cap visual height at 2 lines as requested; user can still scroll the
+      // outer drawer if an extremely long sentence needs more room.
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 }

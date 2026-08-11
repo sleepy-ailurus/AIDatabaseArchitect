@@ -25,6 +25,7 @@ from app.schemas import (
     TableOut,
 )
 from app.services import crypto
+from app.services.relation_candidate import normalize_relationship_direction
 from app.services.schema_parser import SchemaParseError, parse_schema
 
 router = APIRouter(prefix="/api", tags=["schema"])
@@ -114,6 +115,14 @@ def sync_schema(project_id: int, db: Session = Depends(get_db)):
 
     # Persist explicit foreign-key relationships (database_constraint).
     relationship_count = 0
+    # Build lookup helpers to determine FK cardinality based on PK/UNIQUE column flags.
+    _tables_by_name = {t.name: t for t in schema.tables}
+    def _col(tbl_name, col_name):
+        tbl = _tables_by_name.get(tbl_name)
+        if not tbl:
+            return None
+        return next((c for c in tbl.columns if c.name == col_name), None)
+
     for t in schema.tables:
         for fk in t.foreign_keys:
             source_col = fk.get("source_column")
@@ -121,15 +130,41 @@ def sync_schema(project_id: int, db: Session = Depends(get_db)):
             target_col = fk.get("target_column")
             if not (source_col and target_table and target_col):
                 continue
+
+            sc_obj = _col(t.name, source_col)
+            tc_obj = _col(target_table, target_col)
+            src_is_pk = bool(getattr(sc_obj, "is_primary_key", False))
+            tgt_is_pk = bool(getattr(tc_obj, "is_primary_key", False))
+            src_is_unique = bool(getattr(sc_obj, "is_unique", False))
+
+            # Same cardinality rules as llm_service._validate_result — the two must stay in sync.
+            if not src_is_pk and tgt_is_pk:
+                # FK col points at a PK target
+                card = "one-to-one" if src_is_unique else "many-to-one"
+            elif src_is_pk and not tgt_is_pk:
+                card = "one-to-many"
+            elif src_is_pk and tgt_is_pk:
+                card = "one-to-one"
+            else:
+                card = "many-to-one"
+
+            # Normalize (flip N:1 endpoints into 1:N, etc.)
+            st, sc, tt, tc, card_norm = normalize_relationship_direction(
+                t.name,
+                source_col,
+                target_table,
+                target_col,
+                card,
+            )
             # Avoid duplicating an already-confirmed constraint relationship.
             existing = (
                 db.query(Relationship)
                 .filter(
                     Relationship.project_id == project_id,
-                    Relationship.source_table == t.name,
-                    Relationship.source_column == source_col,
-                    Relationship.target_table == target_table,
-                    Relationship.target_column == target_col,
+                    Relationship.source_table == st,
+                    Relationship.source_column == sc,
+                    Relationship.target_table == tt,
+                    Relationship.target_column == tc,
                     Relationship.source_type == "database_constraint",
                 )
                 .first()
@@ -139,11 +174,11 @@ def sync_schema(project_id: int, db: Session = Depends(get_db)):
             db.add(
                 Relationship(
                     project_id=project_id,
-                    source_table=t.name,
-                    source_column=source_col,
-                    target_table=target_table,
-                    target_column=target_col,
-                    cardinality="many-to-one",
+                    source_table=st,
+                    source_column=sc,
+                    target_table=tt,
+                    target_column=tc,
+                    cardinality=card_norm,
                     confidence=1.0,
                     source_type="database_constraint",
                     status="confirmed",

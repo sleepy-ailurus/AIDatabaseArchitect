@@ -6,18 +6,19 @@ rejecting AI suggestions, and creating manual relationships.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app.models import Relationship, SchemaColumn, SchemaSnapshot, SchemaTable
 from app.schemas import RelationshipCreate, RelationshipOut, RelationshipUpdate
+from app.services.relation_candidate import normalize_relationship_direction
 from app.services.schema_parser import is_type_compatible
 
 router = APIRouter(prefix="/api", tags=["relationships"])
 
 _CARDINALITY_DISPLAY = {
-    "many-to-one": "N : 1",
     "one-to-many": "1 : N",
     "one-to-one": "1 : 1",
     "many-to-many": "N : N",
@@ -101,13 +102,20 @@ def list_relationships(
     status_code=status.HTTP_201_CREATED,
 )
 def create_relationship(project_id: int, payload: RelationshipCreate, db: Session = Depends(get_db)):
+    st, sc, tt, tc, card = normalize_relationship_direction(
+        payload.source_table,
+        payload.source_column or "",
+        payload.target_table,
+        payload.target_column or "",
+        payload.cardinality,
+    )
     rel = Relationship(
         project_id=project_id,
-        source_table=payload.source_table,
-        source_column=payload.source_column or "",
-        target_table=payload.target_table,
-        target_column=payload.target_column or "",
-        cardinality=payload.cardinality,
+        source_table=st,
+        source_column=sc,
+        target_table=tt,
+        target_column=tc,
+        cardinality=card,
         confidence=payload.confidence,
         source_type=payload.source_type,
         status=payload.status,
@@ -128,6 +136,20 @@ def update_relationship(relationship_id: int, payload: RelationshipUpdate, db: S
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(rel, key, value)
+    # Re-normalize in case cardinality / endpoints were changed.
+    (
+        rel.source_table,
+        rel.source_column,
+        rel.target_table,
+        rel.target_column,
+        rel.cardinality,
+    ) = normalize_relationship_direction(
+        rel.source_table,
+        rel.source_column,
+        rel.target_table,
+        rel.target_column,
+        rel.cardinality,
+    )
     db.commit()
     db.refresh(rel)
     return _enrich(rel, db)
@@ -149,7 +171,9 @@ def confirm_relationship(relationship_id: int, db: Session = Depends(get_db)):
     if not rel:
         raise HTTPException(status_code=404, detail="关系不存在")
     rel.status = "confirmed"
-    rel.source_type = "manual"
+    # Keep original source_type so UI can correctly distinguish AI-suggested
+    # (source_type=ai_suggestion, shows "AI建议") from truly manual ones
+    # (source_type=manual, shows "手动创建") and database constraints.
     db.commit()
     db.refresh(rel)
     return _enrich(rel, db)
@@ -161,6 +185,86 @@ def reject_relationship(relationship_id: int, db: Session = Depends(get_db)):
     if not rel:
         raise HTTPException(status_code=404, detail="关系不存在")
     rel.status = "rejected"
+    db.commit()
+    db.refresh(rel)
+    return _enrich(rel, db)
+
+
+class BatchRelationshipAction(BaseModel):
+    relationship_ids: list[int]
+
+
+@router.post("/projects/{project_id}/relationships/batch-confirm", response_model=list[RelationshipOut])
+def batch_confirm_relationships(
+    project_id: int,
+    payload: BatchRelationshipAction,
+    db: Session = Depends(get_db),
+):
+    if not payload.relationship_ids:
+        return []
+    rels = (
+        db.query(Relationship)
+        .filter(
+            Relationship.project_id == project_id,
+            Relationship.id.in_(payload.relationship_ids),
+        )
+        .all()
+    )
+    for rel in rels:
+        rel.status = "confirmed"
+        # Keep original source_type so "AI建议" tag survives confirmation in the
+        # ER editor.  Truly manual edges are created with source_type=manual
+        # directly, and AI-born ones remain ai_suggestion for correct display.
+    db.commit()
+    for rel in rels:
+        db.refresh(rel)
+    return [_enrich(r, db) for r in rels]
+
+
+@router.post("/projects/{project_id}/relationships/batch-reject", response_model=list[RelationshipOut])
+def batch_reject_relationships(
+    project_id: int,
+    payload: BatchRelationshipAction,
+    db: Session = Depends(get_db),
+):
+    if not payload.relationship_ids:
+        return []
+    rels = (
+        db.query(Relationship)
+        .filter(
+            Relationship.project_id == project_id,
+            Relationship.id.in_(payload.relationship_ids),
+        )
+        .all()
+    )
+    for rel in rels:
+        rel.status = "rejected"
+    db.commit()
+    for rel in rels:
+        db.refresh(rel)
+    return [_enrich(r, db) for r in rels]
+
+
+@router.post("/relationships/{relationship_id}/reset", response_model=RelationshipOut)
+def reset_relationship(relationship_id: int, db: Session = Depends(get_db)):
+    """Revert a previously confirmed/rejected AI suggestion back to pending review.
+
+    Only suggestions that started life as ai_suggestion can be reset; database-level
+    constraints and user-created manual relationships are immutable in status.
+    """
+    rel = db.get(Relationship, relationship_id)
+    if not rel:
+        raise HTTPException(status_code=404, detail="关系不存在")
+    # Cannot reset a hard database constraint or a manual one-off edge.
+    if rel.source_type == "database_constraint":
+        raise HTTPException(status_code=400, detail="数据库显式外键不可撤销，只能删除")
+    rel.status = "suggested"
+    # If confirm had promoted source_type from ai_suggestion -> manual, flip it back
+    # so suggestion stats / tabs continue to treat it as an AI suggestion.
+    if rel.source_type == "manual":
+        # We don't know for certain it was previously ai_suggestion, but it is safe
+        # to leave as-is: status=suggested alone is enough to re-queue it for review.
+        pass
     db.commit()
     db.refresh(rel)
     return _enrich(rel, db)
