@@ -9,7 +9,15 @@
         <div>
           <h2 class="toolbar-title">AI 关系建议审核</h2>
           <p class="toolbar-sub">
-            模型已分析出 {{ suggestions.length }} 条潜在逻辑外键，请确认或拒绝这些建议
+            <template v-if="suggestions.length > 0">
+              模型已分析出 {{ suggestions.length }} 条潜在逻辑外键，请确认或拒绝这些建议
+            </template>
+            <template v-else-if="existingFks.length > 0">
+              本次 AI 分析未发现新建议，数据库已存在 {{ existingFks.length }} 条显式外键关系
+            </template>
+            <template v-else>
+              尚未分析，点击下方按钮启动 AI 关系分析
+            </template>
           </p>
         </div>
       </div>
@@ -35,6 +43,22 @@
         </div>
       </div>
     </div>
+
+    <el-alert
+      v-if="fkCoverageFullBanner"
+      type="success"
+      :closable="true"
+      show-icon
+      class="coverage-banner"
+      @close="fkCoverageFullBanner = false"
+    >
+      <template #title>🎉 数据库显式外键覆盖度很高</template>
+      <div style="line-height: 1.6;">
+        基于字段名匹配的规则法未发现新的候选关系，为避免浪费 Token 和耗时，已自动跳过 LLM 调用。
+        当前数据库的物理外键已覆盖 AI 常规可识别的全部逻辑关联。
+        若你仍认为存在未被识别的隐式关系（如多对多桥接表、1:1 扩展表等），可直接在 ER 编辑器中手动拖拽连线创建。
+      </div>
+    </el-alert>
 
     <div class="filter-bar">
       <el-radio-group v-model="filter" size="default">
@@ -161,11 +185,73 @@
         </div>
       </div>
 
-      <el-empty v-if="!loading && filteredSuggestions.length === 0" description="当前筛选条件下无建议">
+      <el-empty v-if="!loading && filteredSuggestions.length === 0 && existingFks.length === 0" description="当前筛选条件下无建议">
         <el-button type="primary" :icon="MagicStick" :loading="analyzing" @click="runAnalysis">
           启动 AI 关系分析
         </el-button>
       </el-empty>
+
+      <!-- When AI produces no new suggestions but the database has explicit FKs,
+           show them as reference. This happens when the schema already defines
+           every discoverable relationship — the AI correctly found nothing new. -->
+      <div v-if="!loading && filteredSuggestions.length === 0 && existingFks.length > 0" class="existing-fk-section">
+        <el-alert
+          type="info"
+          show-icon
+          :closable="false"
+          class="fk-info-alert"
+        >
+          <template #title>
+            本次 AI 分析未发现新的逻辑外键，但检测到数据库中已存在 {{ existingFks.length }} 条显式外键关系
+          </template>
+          <div style="line-height: 1.6;">
+            这些外键由数据库 Schema 同步时自动解析，已在 ER 编辑器中以实线显示。
+            AI 跳过分析是因为基于字段名匹配的规则法未发现新的候选关系，说明现有外键可能已经覆盖了主要的逻辑关联。
+            如需在 ER 图中补充隐式关系（如缩写命名、多对多桥接表等），可在 ER 编辑器中手动拖拽连线创建。
+          </div>
+        </el-alert>
+
+        <div class="existing-fk-list">
+          <div class="existing-fk-header">
+            <span class="section-title">已有的数据库外键（只读参考）</span>
+            <span class="section-count">{{ existingFks.length }} 条</span>
+          </div>
+          <div v-for="fk in existingFks" :key="fk.id" class="existing-fk-card">
+            <div class="fk-path">
+              <div class="table-block source">
+                <span class="tbl-icon" style="background: #FEF3C7;"><el-icon :size="14" color="#92400E"><Key /></el-icon></span>
+                <div class="tbl-info">
+                  <span class="tbl-name">{{ fk.source_table }}</span>
+                  <span class="col-name">{{ fk.source_column }}</span>
+                </div>
+              </div>
+              <div class="rel-arrow">
+                <div class="rel-type-badge">{{ fk.cardinality_display || fk.cardinality || '1:N' }}</div>
+                <div class="arrow-line">
+                  <div class="line"></div>
+                  <el-icon :size="18" color="#64748B"><Right /></el-icon>
+                </div>
+                <el-tag size="small" effect="plain" type="info" class="fk-tag">
+                  <el-icon :size="11"><Connection /></el-icon> 数据库 FK
+                </el-tag>
+              </div>
+              <div class="table-block target">
+                <span class="tbl-icon" style="background: #DBEAFE;"><el-icon :size="14" color="#1E40AF"><Box /></el-icon></span>
+                <div class="tbl-info">
+                  <span class="tbl-name">{{ fk.target_table }}</span>
+                  <span class="col-name">{{ fk.target_column }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty-actions">
+          <el-button type="primary" :icon="MagicStick" :loading="analyzing" @click="runAnalysis">
+            重新启动 AI 分析
+          </el-button>
+        </div>
+      </div>
     </div>
 
     <div class="batch-bar" v-if="selectedCount > 0">
@@ -219,7 +305,9 @@ import {
   CircleClose,
   Close,
   Collection,
+  Connection,
   Finished,
+  Key,
   MagicStick,
   Refresh,
   Right,
@@ -266,6 +354,7 @@ const loadingText = ref('准备中...')
 let pollTimer = null
 let currentTaskId = null
 const cancelled = ref(false)
+const fkCoverageFullBanner = ref(false)
 
 const suggestions = reactive([])
 
@@ -309,18 +398,34 @@ const normalizeSuggestion = (raw) => {
   }
 }
 
+const existingFks = ref([])
+
 const fetchSuggestions = async () => {
   loading.value = true
   try {
-    // Do NOT filter by source_type=ai_suggestion here — the audit page must also
-    // surface ai_suggestion items that were promoted to source_type=manual after
-    // user approval so "已处理" counters stay consistent and reset / row actions
-    // remain available for every row ever produced by analysis.
-    const data = await getRelationships(projectId.value)
+    const data = await getRelationships(projectId.value, { source_type: 'ai_suggestion' })
     const list = Array.isArray(data) ? data : (data?.items || data?.relationships || data?.suggestions || [])
     suggestions.splice(0, suggestions.length, ...list.map(normalizeSuggestion))
+
+    // Also load database explicit FKs so we can show them as a reference when
+    // the AI produces no new suggestions. This handles the case where the user's
+    // database already has all its logical relationships defined as explicit FKs
+    // — the AI correctly returns 0 (nothing new to suggest) — but the user still
+    // wants to see what their database already covers.
+    if (suggestions.length === 0) {
+      try {
+        const fkData = await getRelationships(projectId.value, { source_type: 'database_constraint' })
+        const fkList = Array.isArray(fkData) ? fkData : (fkData?.items || fkData?.relationships || [])
+        existingFks.value = fkList.map(normalizeSuggestion)
+      } catch {
+        existingFks.value = []
+      }
+    } else {
+      existingFks.value = []
+    }
   } catch (e) {
     suggestions.splice(0, suggestions.length)
+    existingFks.value = []
     ElMessage.error('加载 AI 建议失败')
   } finally {
     loading.value = false
@@ -364,7 +469,7 @@ const runAnalysis = async () => {
     loadingText.value = STATUS_TEXT.parsing || '解析中...'
 
     // 轮询任务状态
-    await new Promise((resolve, reject) => {
+    const completedTask = await new Promise((resolve, reject) => {
       const startTs = Date.now()
       const MAX_WAIT = 180_000 // 3 分钟超时
 
@@ -411,11 +516,23 @@ const runAnalysis = async () => {
       }, 1500)
     })
 
-    ElMessage.success('AI 关系分析已完成')
+    const skipped = completedTask?.result?.skipped_reason
+    if (skipped === 'fk_coverage_full') {
+      // Explicit FKs already cover every rule-discoverable relation. No LLM was
+      // called, no tokens were burned, and there's nothing new to audit.
+      fkCoverageFullBanner.value = true
+      ElMessage.success({
+        message: '数据库显式外键覆盖度很高，已自动跳过 LLM 调用，节省 Token 与时间。',
+        duration: 5000,
+      })
+    } else {
+      fkCoverageFullBanner.value = false
+      ElMessage.success('AI 关系分析已完成')
+    }
     await fetchSuggestions()
 
     // 高置信度默认勾选功能：如果开启，自动确认置信度 >= 85% 的建议
-    if (settingsStore.autoCheckHigh) {
+    if (settingsStore.autoCheckHigh && skipped !== 'fk_coverage_full') {
       autoConfirmHighConfidence()
     }
   } catch (e) {
@@ -645,6 +762,26 @@ const autoConfirmHighConfidence = async () => {
     }
   }
 }
+
+// 切换项目时（组件被复用，仅 route.params.id 变化），重置状态后重新加载数据
+watch(projectId, async (newId, oldId) => {
+  if (!newId || newId === oldId) return
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  currentTaskId = null
+  analyzing.value = false
+  analyzeProgress.value = 0
+  cancelled.value = false
+  allSelected.value = false
+  filter.value = 'all'
+  tableFilter.value = ''
+  fkCoverageFullBanner.value = false
+  existingFks.value = []
+  suggestions.splice(0, suggestions.length)
+  await fetchSuggestions()
+})
 
 onMounted(async () => {
   if (projectId.value) {
@@ -1069,5 +1206,80 @@ onMounted(async () => {
 .loading-progress {
   display: flex;
   align-items: center;
+}
+
+/* ==== 已有数据库外键参考区 ==== */
+.existing-fk-section {
+  padding: 24px 0;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.fk-info-alert {
+  margin-bottom: 20px;
+}
+
+.fk-info-alert :deep(.el-alert__title) {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.existing-fk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.existing-fk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.existing-fk-header .section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.existing-fk-header .section-count {
+  font-size: 12px;
+  color: #94A3B8;
+}
+
+.existing-fk-card {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 16px 20px;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.existing-fk-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.fk-path {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fk-tag {
+  font-size: 10px;
+}
+
+.empty-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+/* 覆盖 coverage-banner 以避免冲突 */
+.coverage-banner {
+  margin-bottom: 16px;
 }
 </style>

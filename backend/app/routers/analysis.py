@@ -191,6 +191,73 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
         }
         snapshot_data = snapshot.snapshot_data
 
+        # --- Pre-check (rule heuristic): skip LLM entirely when explicit FKs
+        # already cover every discoverable logical relation. This is the case
+        # the user raised: a project with 4 explicit FKs across 5 tables where
+        # rule-based column-name matching finds zero new candidates; running
+        # the LLM over it would burn tokens and still return zero suggestions.
+        rule_total: int | None = None
+        rule_uncovered: int | None = None
+        try:
+            from app.services.schema_parser import schema_from_dict
+            from app.services.relation_candidate import (
+                generate_candidates,
+                normalize_relationship_direction,
+            )
+
+            parsed_schema = schema_from_dict(snapshot_data)
+            rule_candidates = generate_candidates(parsed_schema)
+            rule_total = len(rule_candidates)
+            rule_uncovered = 0
+            for c in rule_candidates:
+                st, sc, tt, tc, _card = normalize_relationship_direction(
+                    c.source_table, c.source_column, c.target_table, c.target_column
+                )
+                key = (st.lower(), sc.lower(), tt.lower(), tc.lower())
+                if key in existing_keys:
+                    continue
+                rule_uncovered += 1
+        except Exception:
+            # If pre-check fails for any reason, behave as if we couldn't pre-check
+            # and let the full workflow continue below (fail-safe).
+            rule_total = None
+            rule_uncovered = None
+
+        # Fast path: rule heuristic produced candidates AND every one of them is
+        # already covered by an existing relationship (explicit FK / manual edge /
+        # prior AI confirmation). This means the obvious naming-convention-driven
+        # relations (xxx_id -> xxx_table) are already exhaustive; the LLM would
+        # essentially just restate what we already have. Skip it, save tokens.
+        #
+        # Important: we DO NOT skip when rule_total == 0 (e.g. column names use
+        # abbreviation hints like "dept_id" vs table "sys_department" — rules can't
+        # match them). In that case the LLM is MORE valuable because it's the only
+        # node that can still recover FK-like links from semantic column context.
+        if rule_total is not None and rule_total > 0 and rule_uncovered == 0:
+            db.close()
+            sdb = SessionLocal()
+            try:
+                t = sdb.get(AnalysisTask, task_id)
+                if t:
+                    t.status = "completed"
+                    t.progress = 100
+                    t.error = None
+                    t.result = {
+                        "candidate_count": rule_total,
+                        "suggestion_count": 0,
+                        "used_llm": False,
+                        "node_log": [
+                            f"pre-check: rule candidates = {rule_total}",
+                            f"pre-check: rule_uncovered = 0 — existing FKs already cover every rule-discoverable relation",
+                            "workflow/LLM skipped (saved tokens & latency)",
+                        ],
+                        "skipped_reason": "fk_coverage_full",
+                    }
+                    sdb.commit()
+            finally:
+                sdb.close()
+            return
+
         # Close the long-living session before invoking the workflow; nodes
         # create their own sessions via SessionLocal. This keeps the task-row
         # updates isolated from relationship writes.
@@ -240,6 +307,7 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
                 t.result = {
                     "candidate_count": summary.get("candidate_count", 0),
                     "suggestion_count": summary.get("suggestion_count", 0),
+                    "filtered_existing_count": summary.get("filtered_existing_count", 0),
                     "used_llm": summary.get("used_llm", False),
                     "node_log": summary.get("node_log") or [],
                 }

@@ -116,6 +116,7 @@
           :default-viewport="{ zoom: 1 }"
           :min-zoom="0.2"
           :max-zoom="2"
+          :snap-grid="{ x: 20, y: 20 }"
           fit-view-on-init
           class="vue-flow-canvas"
           @node-click="onNodeClick"
@@ -460,7 +461,7 @@ const route = useRoute()
 const router = useRouter()
 const erModelStore = useErModelStore()
 const projectStore = useProjectStore()
-const projectId = route.params.id
+const projectId = computed(() => route.params.id)
 
 const nodeTypes = { tableNode: markRaw(TableNode) }
 const edgeTypes = { relationEdge: markRaw(RelationEdge) }
@@ -699,7 +700,7 @@ const onConnect = async (connection) => {
   }
   edges.value.push(newEdge)
   try {
-    const data = await createRelationship(projectId, {
+    const data = await createRelationship(projectId.value, {
       source_table: getSourceName(connection.source),
       target_table: getSourceName(connection.target),
       source_column: newEdge.data.fromColumn,
@@ -738,7 +739,7 @@ const confirmTableConnection = async () => {
   edges.value.push(newEdge)
   erModelStore.addEdge(newEdge)
   try {
-    const data = await createRelationship(projectId, {
+    const data = await createRelationship(projectId.value, {
       source_table: getSourceName(connection.source),
       target_table: getSourceName(connection.target),
       source_column: null,
@@ -876,7 +877,7 @@ const onCardinalityChange = async (newUiCard) => {
     // Revert the optimistic v-model change by re-reading current truth from the server
     // and writing it back to the edge object so the UI matches what is actually stored.
     try {
-      const rels = await getRelationships(projectId)
+      const rels = await getRelationships(projectId.value)
       const list = Array.isArray(rels) ? rels : (rels?.items || rels?.relationships || [])
       const latest = list.find(r => String(r.id) === String(relId))
       if (latest && edge?.data) {
@@ -1111,7 +1112,7 @@ const handleSave = async () => {
   erModelStore.nodes = nodes.value
   erModelStore.edges = edges.value
   try {
-    await erModelStore.saveModel(projectId)
+    await erModelStore.saveModel(projectId.value)
     ElMessage.success(t('erModel.messages.modelSaved'))
   } catch {
     // handled by interceptor
@@ -1128,7 +1129,7 @@ const confirmSaveVersion = async () => {
   erModelStore.nodes = nodes.value
   erModelStore.edges = edges.value
   try {
-    await erModelStore.saveVersion(projectId, versionForm.note)
+    await erModelStore.saveVersion(projectId.value, versionForm.note)
     ElMessage.success(t('erModel.messages.versionSaved'))
     showVersionDialog.value = false
   } catch {
@@ -1138,8 +1139,8 @@ const confirmSaveVersion = async () => {
   }
 }
 
-const goToSuggestions = () => router.push(`/projects/${projectId}/ai-suggestions`)
-const goToExport = () => router.push(`/projects/${projectId}/export`)
+const goToSuggestions = () => router.push(`/projects/${projectId.value}/ai-suggestions`)
+const goToExport = () => router.push(`/projects/${projectId.value}/export`)
 const goToProject = () => router.push('/projects')
 
 const buildFromSchema = (tables, relationships) => {
@@ -1175,7 +1176,7 @@ const loadModel = async () => {
   // 1) 优先加载已保存的 ER 模型（含节点位置、视口）
   let usedSaved = false
   try {
-    const data = await erModelStore.loadModel(projectId)
+    const data = await erModelStore.loadModel(projectId.value)
     if (data?.model_data?.nodes?.length) {
       nodes.value = erModelStore.nodes.map(n => ({ ...n }))
       edges.value = (erModelStore.edges || []).map(normalizeEdge)
@@ -1192,8 +1193,8 @@ const loadModel = async () => {
   if (!usedSaved) {
     try {
       const [tablesData, relsData] = await Promise.all([
-        getTables(projectId),
-        getRelationships(projectId)
+        getTables(projectId.value),
+        getRelationships(projectId.value)
       ])
       const tables = normalizeList(tablesData)
       // Only visualize relationships the user has committed (confirmed/manual) —
@@ -1215,7 +1216,7 @@ const loadModel = async () => {
   //    - 已存在的边（含用户在编辑器中的修改）优先保留，避免覆盖；
   //    - 对已有边合并最新关系元数据（如 constraintName），避免已保存模型里缺少字段。
   try {
-    const relsData = await getRelationships(projectId)
+    const relsData = await getRelationships(projectId.value)
     const rels = normalizeList(relsData).filter(r => r.status === 'confirmed')
     const confirmedIds = new Set(rels.map(r => String(r.id)))
     const relEdges = erModelStore.buildEdges(rels).map(normalizeEdge)
@@ -1272,8 +1273,8 @@ const loadModel = async () => {
   // 4) 用最新 schema + relationships 修复已保存节点的 PK/FK/Unique 标志
   try {
     const [tablesData, relsData] = await Promise.all([
-      getTables(projectId),
-      getRelationships(projectId)
+      getTables(projectId.value),
+      getRelationships(projectId.value)
     ])
     const tables = normalizeList(tablesData)
     // Confirmed + manual relationships are enough to correctly light up the
@@ -1292,7 +1293,7 @@ const loadModel = async () => {
 
 const loadProject = async () => {
   try {
-    const data = await projectStore.fetchProject(projectId)
+    const data = await projectStore.fetchProject(projectId.value)
     if (data) projectName.value = data.name
   } catch {
     // ignore
@@ -1302,6 +1303,20 @@ const loadProject = async () => {
 // 左侧表列表面板折叠/展开后，画布宽度变化，等 0.25s transition 结束再 fitView
 watch(leftSidebarCollapsed, () => {
   setTimeout(() => handleFitView(), 300)
+})
+
+// 切换项目时（组件被复用，仅 route.params.id 变化），清空画布状态后重新加载
+watch(projectId, async (newId, oldId) => {
+  if (!newId || newId === oldId) return
+  nodes.value = []
+  edges.value = []
+  viewport.value = { x: 0, y: 0, zoom: 1 }
+  selectedNode.value = null
+  selectedEdge.value = null
+  erModelStore.nodes = []
+  erModelStore.edges = []
+  setMode(mode.value)
+  await Promise.all([loadProject(), loadModel()])
 })
 
 onMounted(() => {

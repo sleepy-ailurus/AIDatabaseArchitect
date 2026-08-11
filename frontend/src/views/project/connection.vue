@@ -233,7 +233,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useProjectStore } from '@/stores/project'
@@ -244,7 +244,7 @@ const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
 const formRef = ref()
-const projectId = route.params.id
+const projectId = computed(() => route.params.id)
 
 const currentStep = ref(0)
 const showPassword = ref(false)
@@ -381,7 +381,7 @@ const handleSaveAndSync = async () => {
   currentStep.value = 1
   try {
     await saveConnection({
-      project_id: Number(projectId),
+      project_id: Number(projectId.value),
       db_type: form.db_type,
       host: String(form.host),
       port: Number(form.port),
@@ -395,12 +395,12 @@ const handleSaveAndSync = async () => {
     ElMessage.success('连接配置已保存，开始同步 Schema...')
 
     currentStep.value = 2
-    const syncData = await syncSchema(projectId)
+    const syncData = await syncSchema(projectId.value)
     ElMessage.success('Schema 同步完成')
 
     currentStep.value = 3
     setTimeout(() => {
-      router.push(`/projects/${projectId}/er-model`)
+      router.push(`/projects/${projectId.value}/er-model`)
     }, 600)
   } catch (e) {
     currentStep.value = 0
@@ -411,7 +411,7 @@ const handleSaveAndSync = async () => {
 
 const loadExistingConnection = async () => {
   try {
-    const data = await getConnection(projectId)
+    const data = await getConnection(projectId.value)
     if (data) {
       Object.assign(form, {
         db_type: data.db_type || form.db_type,
@@ -434,12 +434,24 @@ const loadExistingConnection = async () => {
 
 const loadProject = async () => {
   try {
-    const data = await projectStore.fetchProject(projectId)
+    const data = await projectStore.fetchProject(projectId.value)
     if (data) projectName.value = data.name
   } catch {
     // ignore
   }
 }
+
+// 切换项目时（组件被复用，仅 route.params.id 变化），重置表单和状态后重新加载
+watch(projectId, async (newId, oldId) => {
+  if (!newId || newId === oldId) return
+  Object.assign(form, {
+    db_type: 'mysql', host: '', port: 3306, database_name: '',
+    username: '', password: '', ssl: false, timeout: 30
+  })
+  currentStep.value = 0
+  resetChecks()
+  await Promise.all([loadProject(), loadExistingConnection()])
+})
 
 onMounted(() => {
   loadProject()

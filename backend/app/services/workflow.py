@@ -238,6 +238,7 @@ def result_validator_node(state: WorkflowState, progress: ProgressCb | None = No
     results = state.get("llm_results") or []
 
     validated: list[dict] = []
+    filtered_existing = 0
     for r in results:
         if not r.get("valid"):
             continue
@@ -248,6 +249,7 @@ def result_validator_node(state: WorkflowState, progress: ProgressCb | None = No
             (r.get("target_column") or "").lower(),
         )
         if key in state.get("existing_keys", set()):
+            filtered_existing += 1
             continue
         # Ensure referenced tables/columns exist in schema (cheap belt+suspenders
         # for skip_llm path).
@@ -257,7 +259,8 @@ def result_validator_node(state: WorkflowState, progress: ProgressCb | None = No
 
     return {
         "validated_results": validated,
-        **_log(state, f"result_validator OK: {len(validated)} passed"),
+        "filtered_existing_count": filtered_existing,
+        **_log(state, f"result_validator OK: {len(validated)} passed, {filtered_existing} already existed"),
     }
 
 
@@ -497,6 +500,7 @@ def run_analysis_workflow(
         "error": final.get("error"),
         "candidate_count": final.get("candidate_count", 0),
         "suggestion_count": final.get("suggestion_count", 0),
+        "filtered_existing_count": final.get("filtered_existing_count", 0),
         "used_llm": bool(final.get("used_llm")),
         "node_log": final.get("node_log") or [],
     }

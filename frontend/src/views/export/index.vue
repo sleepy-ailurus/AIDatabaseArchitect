@@ -113,7 +113,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
@@ -277,6 +277,13 @@ const scrollToSection = (node) => {
     }
   }
 }
+
+// 切换项目时（组件被复用，仅 route.params.id 变化），重新加载预览和导出配置
+watch(projectId, async (newId, oldId) => {
+  if (!newId || newId === oldId) return
+  await loadPreview()
+  getExport(newId).catch(() => {})
+})
 
 onMounted(() => {
   if (projectId.value) {

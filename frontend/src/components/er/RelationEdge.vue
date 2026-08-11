@@ -227,11 +227,8 @@ const labelStyle = computed(() => ({
   fontSize: '11px'
 }))
 
-const labelBgStyle = computed(() => ({
-  fill: isDark.value ? '#2d2d2d' : 'white',
-  padding: '2px 5px',
-  rx: 4
-}))
+const sourceAngle = computed(() => directionAngle(props.sourcePosition))
+const targetAngle = computed(() => directionAngle(props.targetPosition))
 
 const pathComputed = computed(() => {
   return getSmoothStepPath({
@@ -264,9 +261,6 @@ const directionAngle = (position) => {
     default: return 0
   }
 }
-
-const sourceAngle = computed(() => directionAngle(props.sourcePosition))
-const targetAngle = computed(() => directionAngle(props.targetPosition))
 
 const startCrowTransform = computed(() =>
   `translate(${props.sourceX}, ${props.sourceY}) rotate(${sourceAngle.value})`
