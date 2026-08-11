@@ -9,12 +9,6 @@
         <el-input v-model="searchKey" :placeholder="t('project.list.searchPlaceholder')" style="width: 260px; margin-right: 12px;" clearable>
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
-        <el-select v-model="statusFilter" :placeholder="t('project.list.status')" style="width: 120px; margin-right: 12px;" clearable>
-          <el-option :label="t('dashboard.status.analyzing')" value="analyzing" />
-          <el-option :label="t('dashboard.status.completed')" value="completed" />
-          <el-option :label="t('dashboard.status.pending')" value="pending" />
-          <el-option :label="t('dashboard.status.draft')" value="draft" />
-        </el-select>
         <el-button type="primary" :icon="Plus" @click="openCreate">
           {{ t('project.list.newProject') }}
         </el-button>
@@ -76,9 +70,6 @@
             <div class="footer-left">
               <el-tag size="small" effect="plain" :type="getDbTypeTag(p.db_type || p.dbType)">
                 {{ getDbTypeLabel(p.db_type || p.dbType) }}
-              </el-tag>
-              <el-tag size="small" :type="getStatusTag(p.status)" effect="light">
-                {{ getStatusLabel(p.status) }}
               </el-tag>
             </div>
             <div class="footer-right">
@@ -164,7 +155,6 @@ const { tData } = useDataI18n()
 const router = useRouter()
 const projectStore = useProjectStore()
 const searchKey = ref('')
-const statusFilter = ref('')
 const showCreate = ref(false)
 const loading = ref(false)
 const creating = ref(false)
@@ -202,28 +192,6 @@ const getDbTypeLabel = (type) => {
   return map[type] || type || 'MySQL'
 }
 
-const getStatusTag = (status) => {
-  const map = {
-    analyzing: 'warning',
-    completed: 'success',
-    pending: 'info',
-    draft: 'info',
-    connected: 'primary'
-  }
-  return map[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const keyMap = {
-    analyzing: 'dashboard.status.analyzing',
-    completed: 'dashboard.status.completed',
-    pending: 'dashboard.status.pending',
-    draft: 'dashboard.status.draft',
-    connected: 'dashboard.status.connected'
-  }
-  return t(keyMap[status] || 'dashboard.status.draft')
-}
-
 const formatTime = (time) => {
   if (!time) return '-'
   try {
@@ -236,12 +204,7 @@ const formatTime = (time) => {
 
 const filteredProjects = computed(() => {
   return projectStore.projects.filter(p => {
-    const matchSearch = !searchKey.value || (p.name || '').includes(searchKey.value)
-    let matchStatus = true
-    if (statusFilter.value) {
-      matchStatus = p.status === statusFilter.value
-    }
-    return matchSearch && matchStatus
+    return !searchKey.value || (p.name || '').includes(searchKey.value)
   })
 })
 

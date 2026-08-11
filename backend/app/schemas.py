@@ -176,6 +176,10 @@ class RelationshipUpdate(BaseModel):
     status: str | None = None
     source_type: str | None = None
     reason: list[str] | None = None
+    source_table: str | None = None
+    target_table: str | None = None
+    source_column: str | None = None
+    target_column: str | None = None
 
 
 class RelationshipOut(ORMModel):

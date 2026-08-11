@@ -117,11 +117,17 @@
           :min-zoom="0.2"
           :max-zoom="2"
           :snap-grid="{ x: 20, y: 20 }"
+          :connection-mode="ConnectionMode.Loose"
           fit-view-on-init
           class="vue-flow-canvas"
+          :edges-updatable="true"
           @node-click="onNodeClick"
           @edge-click="onEdgeClick"
           @connect="onConnect"
+          @edge-update-start="onEdgeUpdateStart"
+          @edge-update="onEdgeUpdate"
+          @edge-update-end="onEdgeUpdateEnd"
+          @nodes-initialized="onNodesInitialized"
           @pane-click="onPaneClick"
         >
           <Background :gap="20" :size="1" pattern="dots" />
@@ -434,7 +440,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, markRaw, provide, 
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'
 import dagre from 'dagre'
 import { Background } from '@vue-flow/background'
 import { Controls, ControlButton } from '@vue-flow/controls'
@@ -507,7 +513,7 @@ const searchIdx = ref(0)
 const leftSidebarCollapsed = ref(false)
 const topHeaderCollapsed = ref(false)
 
-const { fitView, getNodes, nodesDraggable, panOnDrag, zoomIn, zoomOut } = useVueFlow()
+const { fitView, getNodes, nodesDraggable, panOnDrag, zoomIn, zoomOut, updateNodeInternals } = useVueFlow()
 
 const mode = ref('hand')
 const setMode = (m) => {
@@ -536,41 +542,6 @@ const selectedEdge = computed(() => {
 const filteredNodes = computed(() => {
   if (!sidebarSearchTable.value) return nodes.value
   return nodes.value.filter(n => (n.data.name || '').toLowerCase().includes(sidebarSearchTable.value.toLowerCase()))
-})
-
-// Compute how many source/target handles exist on each side (top/right/bottom/left) per node.
-// This is provided to TableNode so it can render exactly the right number of anchor points,
-// each with a unique position — guaranteeing "one anchor → one edge" (no overlap).
-const _zeroSide = () => ({ source: 0, target: 0 })
-const _zeroNode = () => ({ top: _zeroSide(), right: _zeroSide(), bottom: _zeroSide(), left: _zeroSide() })
-const nodeHandleCounts = computed(() => {
-  const map = new Map()
-  const ensure = (nid) => {
-    if (!map.has(nid)) map.set(nid, _zeroNode())
-    return map.get(nid)
-  }
-  // Always ensure every known node has an entry (so fallback counts render at least 1 fallback handle)
-  for (const n of nodes.value) ensure(String(n.id))
-
-  for (const e of edges.value) {
-    const sm = /^(top|right|bottom|left)-(source|target)(?:-(\d+))?$/.exec(e.sourceHandle || '')
-    if (sm) {
-      const node = ensure(String(e.source))
-      const side = sm[1]
-      const kind = sm[2]
-      const idx = Number(sm[3] ?? 0)
-      node[side][kind] = Math.max(node[side][kind], idx + 1)
-    }
-    const tm = /^(top|right|bottom|left)-(source|target)(?:-(\d+))?$/.exec(e.targetHandle || '')
-    if (tm) {
-      const node = ensure(String(e.target))
-      const side = tm[1]
-      const kind = tm[2]
-      const idx = Number(tm[3] ?? 0)
-      node[side][kind] = Math.max(node[side][kind], idx + 1)
-    }
-  }
-  return map
 })
 
 const onSearchEnter = () => {
@@ -685,6 +656,7 @@ const onConnect = async (connection) => {
     sourceHandle: connection.sourceHandle,
     targetHandle: connection.targetHandle,
     type: 'relationEdge',
+    updatable: true,
     data: {
       cardinality: '1:N',
       sourceType: 'manual',
@@ -713,6 +685,7 @@ const onConnect = async (connection) => {
   } catch {
     // keep local edge even if API fails
   }
+  refreshHandleBounds()
 }
 
 const confirmTableConnection = async () => {
@@ -727,6 +700,7 @@ const confirmTableConnection = async () => {
     sourceHandle: connection.sourceHandle,
     targetHandle: connection.targetHandle,
     type: 'relationEdge',
+    updatable: true,
     data: {
       cardinality,
       sourceType: 'manual',
@@ -752,6 +726,7 @@ const confirmTableConnection = async () => {
   } catch {
     // keep local edge even if API fails
   }
+  refreshHandleBounds()
 
   showCardinalityDialog.value = false
   pendingConnection.value = null
@@ -760,6 +735,149 @@ const confirmTableConnection = async () => {
 const cancelTableConnection = () => {
   showCardinalityDialog.value = false
   pendingConnection.value = null
+}
+
+// ---------------------------------------------------------------------------
+// Edge reconnect via Vue Flow's built-in updater.
+//
+// Pressing an edge endpoint hides the original edge and draws a temporary
+// connection line from the fixed end to the cursor; on release the new
+// connection is applied (or the edge snaps back). Vue Flow emits
+// @edge-update during the drag and @edge-update-end on release.
+// ---------------------------------------------------------------------------
+
+// If Vue Flow cannot resolve the fixed-end handle it never attaches its own
+// pointer-up listener, so the edge would stay hidden forever. Track every
+// update-start and recover the edge when its end event never arrives:
+//  - immediately on the next mouseup (covers normal releases), and
+//  - via a timeout (covers releases outside the window, where no mouseup
+//    event is ever delivered).
+const pendingEdgeUpdates = new Map() // edgeId -> timeout id
+
+const recoverEdge = (id) => {
+  const idx = edges.value.findIndex(e => String(e.id) === id)
+  if (idx < 0) return
+  const snapshot = { ...edges.value[idx] }
+  // Remove for one tick so Vue Flow unmounts the EdgeWrapper (resetting its
+  // internal `updating` flag), then re-add the edge to bring the line back.
+  edges.value = edges.value.filter(e => String(e.id) !== id)
+  erModelStore.edges = edges.value
+  nextTick(() => {
+    edges.value.push(snapshot)
+    erModelStore.edges = edges.value
+  })
+}
+
+const onEdgeUpdateStart = ({ edge }) => {
+  if (!edge) return
+  const id = String(edge.id)
+  clearTimeout(pendingEdgeUpdates.get(id))
+  pendingEdgeUpdates.set(id, setTimeout(() => {
+    if (!pendingEdgeUpdates.has(id)) return
+    pendingEdgeUpdates.delete(id)
+    recoverEdge(id)
+  }, 3000))
+}
+
+const onWindowMouseUp = () => {
+  if (pendingEdgeUpdates.size === 0) return
+  for (const [id, timer] of [...pendingEdgeUpdates]) {
+    clearTimeout(timer)
+    pendingEdgeUpdates.delete(id)
+    recoverEdge(id)
+  }
+}
+
+// Tracks the latest valid connection while the user drags an edge endpoint.
+let pendingReconnect = null
+
+const onEdgeUpdate = ({ edge, connection }) => {
+  if (!edge || !connection) {
+    pendingReconnect = null
+    return
+  }
+  if (String(connection.source) === String(connection.target)) {
+    pendingReconnect = null
+    return
+  }
+  pendingReconnect = {
+    edgeId: String(edge.id),
+    source: String(connection.source),
+    target: String(connection.target),
+    sourceHandle: connection.sourceHandle,
+    targetHandle: connection.targetHandle
+  }
+}
+
+const onEdgeUpdateEnd = async ({ edge }) => {
+  if (edge) {
+    const id = String(edge.id)
+    clearTimeout(pendingEdgeUpdates.get(id))
+    pendingEdgeUpdates.delete(id)
+  }
+  const conn = pendingReconnect
+  pendingReconnect = null
+
+  if (!edge || !conn) {
+    // Update aborted (dropped on invalid area / same node) - force a shallow
+    // copy so Vue Flow re-renders the edge and the line comes back.
+    if (edge) {
+      const idx = edges.value.findIndex(e => String(e.id) === String(edge.id))
+      if (idx >= 0) {
+        edges.value[idx] = { ...edges.value[idx] }
+        edges.value = [...edges.value]
+      }
+    }
+    return
+  }
+
+  if (conn.edgeId !== String(edge.id)) return
+  if (conn.source === conn.target) return
+
+  const idx = edges.value.findIndex(e => String(e.id) === conn.edgeId)
+  if (idx < 0) return
+  const before = edges.value[idx]
+
+  const updated = {
+    ...before,
+    source: conn.source,
+    target: conn.target,
+    sourceHandle: conn.sourceHandle ?? before.sourceHandle,
+    targetHandle: conn.targetHandle ?? before.targetHandle
+  }
+  edges.value[idx] = updated
+  edges.value = [...edges.value]
+  erModelStore.updateEdge(updated)
+  refreshHandleBounds()
+
+  const sourceNodeChanged = String(before.source) !== conn.source
+  const targetNodeChanged = String(before.target) !== conn.target
+  if (sourceNodeChanged || targetNodeChanged) {
+    const relId = Number(edge.id)
+    if (!relId || Number.isNaN(relId)) return
+    try {
+      await updateRelationship(relId, {
+        source_table: getSourceName(conn.source),
+        target_table: getTargetName(conn.target),
+        source_column: sourceNodeChanged ? null : undefined,
+        target_column: targetNodeChanged ? null : undefined
+      })
+      if (updated.data) {
+        if (sourceNodeChanged) updated.data.fromColumn = null
+        if (targetNodeChanged) updated.data.toColumn = null
+      }
+    } catch {
+      edges.value[idx] = before
+      edges.value = [...edges.value]
+      erModelStore.updateEdge(before)
+    }
+  }
+}
+
+const refreshHandleBounds = () => {
+  nextTick(() => {
+    updateNodeInternals(nodes.value.map(n => String(n.id)))
+  })
 }
 
 const copyNode = (nodeId) => {
@@ -796,12 +914,20 @@ const deleteNode = (nodeId) => {
 }
 
 const deleteEdge = async (id) => {
-  try {
-    await deleteRelationship(id)
-    ElMessage.success(t('erModel.messages.relationDeleted'))
-  } catch {
-    // ignore
+  const numericId = Number(id)
+  const isPersisted = Number.isInteger(numericId) && numericId > 0
+  if (isPersisted) {
+    try {
+      await deleteRelationship(numericId)
+      ElMessage.success(t('erModel.messages.relationDeleted'))
+    } catch {
+      // keep local edge even if API fails
+    }
   }
+  // Local-only edges (the create response never confirmed a server id, e.g.
+  // `e-<timestamp>`) have no relationship row to delete. Calling the API with
+  // such an id would fail with 422 (path expects an int), so skip it and just
+  // drop the edge from the canvas.
   edges.value = edges.value.filter(e => e.id !== id)
   erModelStore.removeEdge(id)
   selectedEdgeId.value = null
@@ -943,8 +1069,18 @@ provide('nodeActions', {
   deleteNode,
   openAddColumn
 })
-// Provide handle counts so TableNode components can render the right number of anchor points
-provide('nodeHandleCounts', nodeHandleCounts)
+// Set of `${nodeId}|${handleId}` anchors already used by an edge, provided to
+// TableNode so occupied anchors show a move cursor and reconnect their edge on
+// press instead of starting a brand-new connection.
+const occupiedHandleKeys = computed(() => {
+  const set = new Set()
+  for (const e of edges.value) {
+    if (e.sourceHandle) set.add(`${String(e.source)}|${e.sourceHandle}`)
+    if (e.targetHandle) set.add(`${String(e.target)}|${e.targetHandle}`)
+  }
+  return set
+})
+provide('occupiedHandleKeys', occupiedHandleKeys)
 
 const saveNewColumn = () => {
   if (!addColForm.name.trim()) {
@@ -982,6 +1118,18 @@ const saveColumnEdit = () => {
   }
   showEditColumn.value = false
   ElMessage.success(t('erModel.messages.fieldUpdated'))
+}
+
+// Saved ER models can carry stale `handleBounds` (e.g. an edge pointing at
+// `right-target-1` while the node's saved bounds only contain `right-target-0`).
+// Vue Flow only re-measures handle positions when node dimensions change, so on
+// load it keeps using the stale bounds: edges render at fallback positions and
+// their reconnection handles fail the internal handle lookup. Re-measure all
+// handles from the DOM once nodes are initialized.
+const onNodesInitialized = () => {
+  nextTick(() => {
+    updateNodeInternals(nodes.value.map(n => String(n.id)))
+  })
 }
 
 const handleFitView = () => {
@@ -1030,10 +1178,18 @@ const autoLayout = () => {
     }
   })
 
-  // First pass: choose sides per edge, then bucket edges by (nodeId, side, src|tgt)
-  // to assign a unique index per bucket — guarantee "one anchor → one edge".
+  // Every table has exactly four anchors (one per side). Multiple edges between
+  // the same pair of tables rotate through the sides so they do not all pile up
+  // on the same anchor: the first edge takes the geometrically best side, the
+  // next one takes the next free side, etc.
+  const SIDE_CYCLE = [
+    ['right', 'left'],
+    ['bottom', 'top'],
+    ['left', 'right'],
+    ['top', 'bottom']
+  ]
+  const pairCounter = new Map()
   const firstPass = []
-  const bucketCounter = new Map()
   edges.value.forEach(edge => {
     const sourceNode = vueNodes.find(n => String(n.id) === String(edge.source))
     const targetNode = vueNodes.find(n => String(n.id) === String(edge.target))
@@ -1047,31 +1203,29 @@ const autoLayout = () => {
     const ty = targetNode.position.y + (targetNode.dimensions?.height || targetNode.height || 200) / 2
     const dx = tx - sx
     const dy = ty - sy
-    let srcSide, tgtSide
+    let geo
     if (Math.abs(dy) > Math.abs(dx)) {
-      if (dy > 0) { srcSide = 'bottom'; tgtSide = 'top' }
-      else { srcSide = 'top'; tgtSide = 'bottom' }
+      geo = dy > 0 ? ['bottom', 'top'] : ['top', 'bottom']
     } else {
-      if (dx > 0) { srcSide = 'right'; tgtSide = 'left' }
-      else { srcSide = 'left'; tgtSide = 'right' }
+      geo = dx > 0 ? ['right', 'left'] : ['left', 'right']
     }
-    const srcBucket = `${String(edge.source)}|${srcSide}|src`
-    const tgtBucket = `${String(edge.target)}|${tgtSide}|tgt`
-    const srcIdx = bucketCounter.get(srcBucket) ?? 0
-    const tgtIdx = bucketCounter.get(tgtBucket) ?? 0
-    bucketCounter.set(srcBucket, srcIdx + 1)
-    bucketCounter.set(tgtBucket, tgtIdx + 1)
-    firstPass.push({ edge, srcSide, tgtSide, srcIdx, tgtIdx })
+    const pairKey = `${String(edge.source)}|${String(edge.target)}`
+    const pairIdx = pairCounter.get(pairKey) ?? 0
+    pairCounter.set(pairKey, pairIdx + 1)
+    const ordered = [geo, ...SIDE_CYCLE.filter(s => s[0] !== geo[0])]
+    const [srcSide, tgtSide] = ordered[pairIdx % ordered.length]
+    firstPass.push({ edge, srcSide, tgtSide })
   })
 
-  edges.value = firstPass.map(({ edge, srcSide, tgtSide, srcIdx, tgtIdx }) => {
+  edges.value = firstPass.map(({ edge, srcSide, tgtSide }) => {
     if (!srcSide || !tgtSide) return edge
     return {
       ...edge,
-      sourceHandle: `${srcSide}-source-${srcIdx}`,
-      targetHandle: `${tgtSide}-target-${tgtIdx}`
+      sourceHandle: `${srcSide}-source-0`,
+      targetHandle: `${tgtSide}-source-0`
     }
   })
+  refreshHandleBounds()
 
   ElMessage.success(t('erModel.messages.autoLayoutDone'))
   handleFitView()
@@ -1153,13 +1307,26 @@ const buildFromSchema = (tables, relationships) => {
 
 const normalizeList = (d) => Array.isArray(d) ? d : (d?.items || d?.relationships || d?.tables || [])
 
+// Every table has exactly four anchors (top/right/bottom/left, one per side),
+// so every edge handle is normalized to the fixed `-0` id of that side. Old
+// models with indexed ids (`right-source-1`) are folded back to `-0`.
+// Every table has exactly four anchors (top/right/bottom/left, one per side,
+// type=source). Loose connection mode lets every anchor act as both source and
+// target, so edge source/target handles both use the fixed `${side}-source-0` id.
+const normalizeHandleId = (handleId, fallback) => {
+  const m = /^(top|right|bottom|left)-(source|target)(?:-(\d+))?$/.exec(handleId || '')
+  if (!m) return fallback
+  return `${m[1]}-source-0`
+}
+
 const normalizeEdge = (edge) => {
   const data = edge.data || {}
   return {
     ...edge,
     type: 'relationEdge',
-    sourceHandle: edge.sourceHandle || 'right-source',
-    targetHandle: edge.targetHandle || 'left-target',
+    updatable: true,
+    sourceHandle: normalizeHandleId(edge.sourceHandle, 'right-source-0'),
+    targetHandle: normalizeHandleId(edge.targetHandle, 'left-source-0'),
     data: {
       cardinality: data.cardinality || '1:N',
       sourceType: data.sourceType || 'database',
@@ -1173,10 +1340,15 @@ const normalizeEdge = (edge) => {
 }
 
 const loadModel = async () => {
+  // Snapshot the project id: if the user navigates away while this
+  // async load is still running, route.params.id becomes undefined and later
+  // requests would hit /api/projects/undefined/... (422).
+  const pid = projectId.value
+  if (!pid) return
   // 1) 优先加载已保存的 ER 模型（含节点位置、视口）
   let usedSaved = false
   try {
-    const data = await erModelStore.loadModel(projectId.value)
+    const data = await erModelStore.loadModel(pid)
     if (data?.model_data?.nodes?.length) {
       nodes.value = erModelStore.nodes.map(n => ({ ...n }))
       edges.value = (erModelStore.edges || []).map(normalizeEdge)
@@ -1193,8 +1365,8 @@ const loadModel = async () => {
   if (!usedSaved) {
     try {
       const [tablesData, relsData] = await Promise.all([
-        getTables(projectId.value),
-        getRelationships(projectId.value)
+        getTables(pid),
+        getRelationships(pid)
       ])
       const tables = normalizeList(tablesData)
       // Only visualize relationships the user has committed (confirmed/manual) —
@@ -1216,7 +1388,7 @@ const loadModel = async () => {
   //    - 已存在的边（含用户在编辑器中的修改）优先保留，避免覆盖；
   //    - 对已有边合并最新关系元数据（如 constraintName），避免已保存模型里缺少字段。
   try {
-    const relsData = await getRelationships(projectId.value)
+    const relsData = await getRelationships(pid)
     const rels = normalizeList(relsData).filter(r => r.status === 'confirmed')
     const confirmedIds = new Set(rels.map(r => String(r.id)))
     const relEdges = erModelStore.buildEdges(rels).map(normalizeEdge)
@@ -1243,8 +1415,17 @@ const loadModel = async () => {
         existing = candidates.find(c => !c.data?.constraintName)
       }
       if (existing) {
-        edgeMap.set(existing.id, normalizeEdge({
+        // If the existing edge is a local-only temp edge (the create response
+        // was lost before the id was applied), adopt the real DB relationship id
+        // so delete/update hit the correct API and the edge doesn't stay an
+        // orphan that reappears after reload.
+        const existingId = String(existing.id)
+        const finalId = existingId.startsWith('e-') && String(e.id) !== existingId
+          ? e.id
+          : existing.id
+        edgeMap.set(finalId, normalizeEdge({
           ...existing,
+          id: finalId,
           data: {
             ...(existing.data || {}),
             constraintName: e.data?.constraintName || existing.data?.constraintName || null,
@@ -1273,8 +1454,8 @@ const loadModel = async () => {
   // 4) 用最新 schema + relationships 修复已保存节点的 PK/FK/Unique 标志
   try {
     const [tablesData, relsData] = await Promise.all([
-      getTables(projectId.value),
-      getRelationships(projectId.value)
+      getTables(pid),
+      getRelationships(pid)
     ])
     const tables = normalizeList(tablesData)
     // Confirmed + manual relationships are enough to correctly light up the
@@ -1289,11 +1470,14 @@ const loadModel = async () => {
 
   erModelStore.nodes = nodes.value
   erModelStore.edges = edges.value
+  refreshHandleBounds()
 }
 
 const loadProject = async () => {
+  const pid = projectId.value
+  if (!pid) return
   try {
-    const data = await projectStore.fetchProject(projectId.value)
+    const data = await projectStore.fetchProject(pid)
     if (data) projectName.value = data.name
   } catch {
     // ignore
@@ -1323,6 +1507,7 @@ onMounted(() => {
   setMode(mode.value)
   loadProject()
   loadModel()
+  window.addEventListener('mouseup', onWindowMouseUp)
 
   registerShortcut('Ctrl+s', handleSave)
   registerShortcut('Ctrl+l', autoLayout)
@@ -1330,6 +1515,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('mouseup', onWindowMouseUp)
   unregisterShortcut('Ctrl+s')
   unregisterShortcut('Ctrl+l')
   unregisterShortcut('Ctrl+e')

@@ -443,6 +443,7 @@ const general = reactive({
 
 const shortcuts = reactive([
   { key: 'newProject', name: '新建项目', keys: 'Ctrl + N' },
+  { key: 'globalSearch', name: '全局搜索', keys: 'Ctrl + K' },
   { key: 'saveModel', name: '保存模型', keys: 'Ctrl + S' },
   { key: 'autoLayout', name: '自动布局', keys: 'Ctrl + L' },
   { key: 'exportDoc', name: '导出文档', keys: 'Ctrl + E' },

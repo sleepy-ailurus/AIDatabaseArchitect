@@ -59,8 +59,19 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/projects", response_model=list[ProjectOut])
-def list_projects(db: Session = Depends(get_db)):
-    projects = db.query(Project).order_by(Project.updated_at.desc()).all()
+def list_projects(
+    search: str | None = None,
+    limit: int | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Project)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(Project.name.ilike(like))
+    query = query.order_by(Project.updated_at.desc())
+    if limit:
+        query = query.limit(limit)
+    projects = query.all()
     return [_enrich(p, db) for p in projects]
 
 

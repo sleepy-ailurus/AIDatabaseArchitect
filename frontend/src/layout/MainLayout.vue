@@ -3,7 +3,7 @@
     <aside class="sidebar" :class="{ collapsed: isCollapsed }">
       <div class="logo-section">
         <div class="logo-icon">
-          <el-icon :size="28" color="#3B82F6"><DataBase /></el-icon>
+          <img :src="logoImg" class="logo-img" alt="logo" />
         </div>
         <transition name="fade">
           <div v-if="!isCollapsed" class="logo-text">
@@ -57,11 +57,31 @@
         </div>
 
         <div class="header-center">
-          <div class="search-box">
-            <el-icon :size="14" color="#94A3B8"><Search /></el-icon>
-            <input type="text" :placeholder="t('app.searchPlaceholder')" class="search-input" />
-            <kbd class="shortcut-hint">Ctrl+K</kbd>
-          </div>
+          <el-autocomplete
+            v-model="searchQuery"
+            :fetch-suggestions="fetchProjectSuggestions"
+            :placeholder="t('app.searchPlaceholder')"
+            :debounce="200"
+            trigger-on-focus
+            clearable
+            class="search-box"
+            popper-class="global-search-popper"
+            @select="onProjectSelect"
+            @keyup.enter="onSearchEnter"
+          >
+            <template #prefix>
+              <el-icon :size="14" color="#94A3B8"><Search /></el-icon>
+            </template>
+            <template #default="{ item }">
+              <div class="suggestion-item">
+                <span class="suggestion-name">{{ item.name }}</span>
+                <span class="suggestion-db">{{ item.db_type || 'MySQL' }}</span>
+              </div>
+            </template>
+            <template #suffix>
+              <kbd class="shortcut-hint">Ctrl+K</kbd>
+            </template>
+          </el-autocomplete>
         </div>
       </header>
 
@@ -90,13 +110,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import SettingsDialog from '@/components/SettingsDialog.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { registerShortcut, unregisterShortcut } from '@/utils/shortcuts'
+import { getProjects } from '@/api/project'
+import logoImg from '@/resource/theme.png'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -105,6 +127,7 @@ const settingsStore = useSettingsStore()
 
 const isCollapsed = ref(false)
 const showSettings = ref(false)
+const searchQuery = ref('')
 
 const handleNewProject = () => {
   router.push('/projects')
@@ -114,14 +137,63 @@ const handleOpenSettings = () => {
   showSettings.value = true
 }
 
+const fetchProjectSuggestions = async (query, cb) => {
+  if (!query) {
+    cb([])
+    return
+  }
+  try {
+    const data = await getProjects({ search: query, limit: 10 })
+    const list = Array.isArray(data) ? data : (data?.items || data?.projects || [])
+    cb(list.map(p => ({
+      value: p.name,
+      id: p.id,
+      name: p.name,
+      db_type: p.db_type || p.dbType || 'MySQL',
+    })))
+  } catch {
+    cb([])
+  }
+}
+
+const onProjectSelect = (item) => {
+  if (item?.id) {
+    searchQuery.value = ''
+    router.push(`/projects/${item.id}/er-model`)
+  }
+}
+
+const onSearchEnter = async () => {
+  if (!searchQuery.value) return
+  try {
+    const data = await getProjects({ search: searchQuery.value, limit: 1 })
+    const list = Array.isArray(data) ? data : (data?.items || data?.projects || [])
+    if (list.length > 0) {
+      searchQuery.value = ''
+      router.push(`/projects/${list[0].id}/er-model`)
+    }
+  } catch {
+    // silent fail
+  }
+}
+
+const focusSearch = () => {
+  nextTick(() => {
+    const input = document.querySelector('.search-box input')
+    if (input) input.focus()
+  })
+}
+
 onMounted(() => {
   registerShortcut('Ctrl+n', handleNewProject)
   registerShortcut('Ctrl+,', handleOpenSettings)
+  registerShortcut('Ctrl+k', focusSearch)
 })
 
 onBeforeUnmount(() => {
   unregisterShortcut('Ctrl+n')
   unregisterShortcut('Ctrl+,')
+  unregisterShortcut('Ctrl+k')
 })
 
 const menuTextColor = computed(() => settingsStore.isDark ? '#94a3b8' : '#64748B')
@@ -185,14 +257,27 @@ const resolvePath = (path) => {
 }
 
 .logo-icon {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(99, 102, 241, 0.1));
   border-radius: 10px;
   flex-shrink: 0;
+
+  .logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+    display: block;
+  }
+}
+
+.sidebar.collapsed .logo-icon {
+  width: 32px;
+  height: 32px;
 }
 
 .logo-text {
@@ -362,24 +447,48 @@ const resolvePath = (path) => {
 .search-box {
   display: flex;
   align-items: center;
-  gap: 8px;
   width: 100%;
   max-width: 440px;
   height: 34px;
-  padding: 0 14px;
-  background: $bg-light;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  transition: $transition-base;
 
-  &:hover {
-    background: #f1f5f9;
+  :deep(.el-autocomplete__wrapper) {
+    width: 100%;
+    height: 34px;
+    padding: 0 14px;
+    background: $bg-light;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    transition: $transition-base;
+
+    &:hover {
+      background: #f1f5f9;
+    }
+
+    &.is-focus {
+      background: $bg-white;
+      border-color: $primary-color;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
   }
 
-  &:focus-within {
-    background: $bg-white;
-    border-color: $primary-color;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  :deep(.el-autocomplete__input) {
+    flex: 1;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 13px;
+    color: $text-primary;
+    font-family: inherit;
+    height: 32px;
+
+    &::placeholder {
+      color: $text-placeholder;
+    }
+  }
+
+  :deep(.el-autocomplete__prefix) {
+    display: flex;
+    align-items: center;
   }
 }
 
@@ -404,6 +513,48 @@ const resolvePath = (path) => {
   padding: 2px 6px;
   border-radius: 4px;
   font-family: inherit;
+}
+
+/* Suggestion item styling */
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.suggestion-name {
+  font-size: 13px;
+  color: $text-primary;
+  font-weight: 500;
+}
+
+.suggestion-db {
+  font-size: 11px;
+  color: $text-secondary;
+  background: $bg-light;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.global-search-popper {
+  :deep(.el-autocomplete-suggestion__list) {
+    padding: 6px;
+  }
+
+  :deep(.el-autocomplete-suggestion__item) {
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 2px;
+
+    &.is-checked {
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    &:hover {
+      background: $bg-light;
+    }
+  }
 }
 
 .header-right {
@@ -517,25 +668,40 @@ html.dark {
   }
 
   .search-box {
-    background: #3c3c3c !important;
-    border-color: transparent !important;
+    :deep(.el-autocomplete__wrapper) {
+      background: #3c3c3c !important;
+      border-color: transparent !important;
 
-    &:hover {
-      background: #4a4a4a !important;
+      &:hover {
+        background: #4a4a4a !important;
+      }
+
+      &.is-focus {
+        background: #252526 !important;
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+      }
     }
 
-    &:focus-within {
-      background: #252526 !important;
-      border-color: #3b82f6 !important;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+    :deep(.el-autocomplete__input) {
+      color: #f8fafc !important;
+
+      &::placeholder {
+        color: #94a3b8 !important;
+      }
     }
   }
 
-  .search-input {
-    color: #f8fafc !important;
+  .global-search-popper {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
 
-    &::placeholder {
-      color: #94a3b8 !important;
+    :deep(.el-autocomplete-suggestion__item) {
+      color: #f8fafc !important;
+
+      &:hover {
+        background: #3c3c3c !important;
+      }
     }
   }
 

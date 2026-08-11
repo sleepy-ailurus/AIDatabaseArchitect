@@ -347,6 +347,7 @@ export default {
       tableDuplicated: 'Table duplicated',
       tableDeleted: 'Table deleted',
       relationDeleted: 'Relation deleted',
+      anchorOccupied: 'This anchor is already used by another relation',
       relationUpdated: 'Relation cardinality updated',
       saveFailed: 'Save failed, please try again',
       enterFieldName: 'Please enter field name',
@@ -419,7 +420,8 @@ export default {
       saveModel: 'Save Model',
       autoLayout: 'Auto Layout',
       exportDoc: 'Export Document',
-      openSettings: 'Open Settings'
+      openSettings: 'Open Settings',
+      globalSearch: 'Global Search'
     },
     about: {
       version: 'Version v0.1.0',

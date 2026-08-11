@@ -24,28 +24,23 @@
       stroke-linejoin="round"
     />
 
-    <!-- Start decoration
-         +x direction = away from table, into the line (after rotation)
-         From line to table (decreasing +x): circle(+10) → crow V(+4) → crow tip(0) → table
-    -->
+    <!-- Start decoration: crow's foot for the source end -->
     <g v-if="startMarkerType === 'tick'" :transform="startCrowTransform">
       <line x1="4" y1="-6" x2="4" y2="6" :stroke="edgeColor" stroke-width="2" stroke-linecap="round" />
       <line x1="8" y1="-6" x2="8" y2="6" :stroke="edgeColor" stroke-width="2" stroke-linecap="round" />
     </g>
     <g v-else-if="startMarkerType === 'crow'" :transform="startCrowTransform">
-      <circle cx="10" cy="0" r="2.5" :fill="isDark ? '#1e1e1e' : 'white'" :stroke="edgeColor" stroke-width="1.8" />
       <line x1="4" y1="0" x2="0" y2="-5" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
       <line x1="4" y1="0" x2="0" y2="0" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
       <line x1="4" y1="0" x2="0" y2="5" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
     </g>
 
-    <!-- End decoration -->
+    <!-- End decoration: crow's foot for the target end -->
     <g v-if="endMarkerType === 'tick'" :transform="endCrowTransform">
       <line x1="4" y1="-6" x2="4" y2="6" :stroke="edgeColor" stroke-width="2" stroke-linecap="round" />
       <line x1="8" y1="-6" x2="8" y2="6" :stroke="edgeColor" stroke-width="2" stroke-linecap="round" />
     </g>
     <g v-else-if="endMarkerType === 'crow'" :transform="endCrowTransform">
-      <circle cx="10" cy="0" r="2.5" :fill="isDark ? '#1e1e1e' : 'white'" :stroke="edgeColor" stroke-width="1.8" />
       <line x1="6" y1="0" x2="0" y2="-5" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
       <line x1="6" y1="0" x2="0" y2="0" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
       <line x1="6" y1="0" x2="0" y2="5" :stroke="edgeColor" stroke-width="1.8" stroke-linecap="round" />
@@ -107,6 +102,7 @@
     >
       <el-icon :size="12"><Close /></el-icon>
     </div>
+
   </g>
 </template>
 
@@ -227,8 +223,6 @@ const labelStyle = computed(() => ({
   fontSize: '11px'
 }))
 
-const sourceAngle = computed(() => directionAngle(props.sourcePosition))
-const targetAngle = computed(() => directionAngle(props.targetPosition))
 
 const pathComputed = computed(() => {
   return getSmoothStepPath({
@@ -239,9 +233,9 @@ const pathComputed = computed(() => {
     targetY: props.targetY,
     targetPosition: props.targetPosition,
     borderRadius: 4,
-    // offset = distance the line endpoint sits back FROM the handle (into the line)
-    // Decorations are drawn from handle center (0,0) outward into the line (+x, 0 to 10px)
-    // This offset must be >= max decoration extent (crow tip at x=0 handle, circle at x=10)
+    // offset = distance the line endpoint sits back FROM the handle (into the line).
+    // The crow's-foot decorations are shifted out by 10px as well (see the
+    // transforms below), so the end markers do not overlap the fixed anchor dot.
     offset: 12
   })
 })
@@ -250,8 +244,10 @@ const path = computed(() => pathComputed.value[0])
 const labelX = computed(() => pathComputed.value[1])
 const labelY = computed(() => pathComputed.value[2])
 
-// Angle mapping: rotate so local +x points AWAY from the handle (into the line)
-// Handle position on the side of the node → line goes outward from that side → that's the +x direction
+const sourceAngle = computed(() => directionAngle(props.sourcePosition))
+const targetAngle = computed(() => directionAngle(props.targetPosition))
+
+// Angle mapping: rotate so local +x points AWAY from the handle (into the line).
 const directionAngle = (position) => {
   switch (position) {
     case 'right': return 0
@@ -272,6 +268,7 @@ const endCrowTransform = computed(() =>
 const handleDelete = () => {
   emit('delete', props.id)
 }
+
 </script>
 
 <script>

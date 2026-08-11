@@ -179,11 +179,12 @@ export const useErModelStore = defineStore('erModel', () => {
       }
     })
 
-    // 2) Choose handle side (right/left/top/bottom) for each edge based on node layout,
-    //    then bucket edges by (nodeId, side, isSource) so each bucket gets a unique index.
-    //    This guarantees "one anchor → one edge" (no two edges share the exact handle id).
-    const chooseSides = (srcNode, tgtNode) => {
-      if (!srcNode || !tgtNode) return { srcSide: 'right', tgtSide: 'left' }
+    // 2) Every table has exactly four anchors (one per side). Multiple edges
+    //    between the same pair of tables rotate through the sides so they do
+    //    not all pile up on the same anchor: the first edge takes the
+    //    geometrically best side, the next one takes the next free side, etc.
+    const chooseGeo = (srcNode, tgtNode) => {
+      if (!srcNode || !tgtNode) return ['right', 'left']
       const sx = srcNode.position?.x ?? 0
       const sy = srcNode.position?.y ?? 0
       const tx = tgtNode.position?.x ?? 0
@@ -191,48 +192,45 @@ export const useErModelStore = defineStore('erModel', () => {
       const dx = tx - sx
       const dy = ty - sy
       if (Math.abs(dy) > Math.abs(dx)) {
-        return dy > 0
-          ? { srcSide: 'bottom', tgtSide: 'top' }
-          : { srcSide: 'top', tgtSide: 'bottom' }
+        return dy > 0 ? ['bottom', 'top'] : ['top', 'bottom']
       }
-      return dx > 0
-        ? { srcSide: 'right', tgtSide: 'left' }
-        : { srcSide: 'left', tgtSide: 'right' }
+      return dx > 0 ? ['right', 'left'] : ['left', 'right']
     }
 
-    // First pass: assign sides + build bucket counts
+    const SIDE_CYCLE = [
+      ['right', 'left'],
+      ['bottom', 'top'],
+      ['left', 'right'],
+      ['top', 'bottom']
+    ]
+    const pairCounter = new Map()
     const edgeAssignments = []
-    const bucketCounter = new Map() // key = `${nodeId}|${side}|${src|tgt}` → count
     for (const item of normalized) {
       const srcNode = resolveNode(item.src)
       const tgtNode = resolveNode(item.tgt)
-      const { srcSide, tgtSide } = chooseSides(srcNode, tgtNode)
+      const geo = chooseGeo(srcNode, tgtNode)
+      const pairKey = `${String(item.src)}|${String(item.tgt)}`
+      const pairIdx = pairCounter.get(pairKey) ?? 0
+      pairCounter.set(pairKey, pairIdx + 1)
+      const ordered = [geo, ...SIDE_CYCLE.filter(s => s[0] !== geo[0])]
+      const [srcSide, tgtSide] = ordered[pairIdx % ordered.length]
       const srcId = resolveNodeId(item.src)
       const tgtId = resolveNodeId(item.tgt)
-
-      const srcBucket = `${srcId}|${srcSide}|src`
-      const tgtBucket = `${tgtId}|${tgtSide}|tgt`
-      const srcIdx = bucketCounter.get(srcBucket) ?? 0
-      const tgtIdx = bucketCounter.get(tgtBucket) ?? 0
-      bucketCounter.set(srcBucket, srcIdx + 1)
-      bucketCounter.set(tgtBucket, tgtIdx + 1)
-
       edgeAssignments.push({
         ...item,
-        srcId, tgtId, srcSide, tgtSide, srcIdx, tgtIdx
+        srcId, tgtId, srcSide, tgtSide
       })
     }
 
-    // 3) Build final edges with unique sourceHandle/targetHandle ids.
-    //    Handle id format: `${side}-${src|tgt}-${index}` — matches TableNode dynamic handles.
+    // 3) Build final edges. Anchor ids are fixed (-0): one anchor per side.
     return edgeAssignments.map((a) => {
       const r = a.rawRel
       return {
         id: String(r.id ?? `e${a.idx}`),
         source: a.srcId,
         target: a.tgtId,
-        sourceHandle: `${a.srcSide}-source-${a.srcIdx}`,
-        targetHandle: `${a.tgtSide}-target-${a.tgtIdx}`,
+        sourceHandle: `${a.srcSide}-source-0`,
+        targetHandle: `${a.tgtSide}-source-0`,
         type: 'relationEdge',
         data: {
           cardinality: a.card,
@@ -301,6 +299,15 @@ export const useErModelStore = defineStore('erModel', () => {
     if (!exists) edges.value.push(edge)
   }
 
+  const updateEdge = (edge) => {
+    const idx = edges.value.findIndex(e => String(e.id) === String(edge.id))
+    if (idx >= 0) {
+      edges.value[idx] = { ...edges.value[idx], ...edge }
+    } else {
+      edges.value.push(edge)
+    }
+  }
+
   const removeEdge = (id) => {
     edges.value = edges.value.filter(e => e.id !== id)
   }
@@ -330,6 +337,7 @@ export const useErModelStore = defineStore('erModel', () => {
     saveVersion,
     addNode,
     addEdge,
+    updateEdge,
     removeEdge,
     removeNode,
     reset

@@ -2,7 +2,7 @@ export default {
   app: {
     title: 'AI DB Architect',
     subtitle: '数据库智能分析',
-    searchPlaceholder: '搜索项目、数据库、表...',
+    searchPlaceholder: '搜索项目',
     settings: '设置'
   },
   // Dynamic data translations - map backend Chinese values (pass-through for zh)
@@ -345,6 +345,7 @@ export default {
       tableDuplicated: '表已复制',
       tableDeleted: '表已删除',
       relationDeleted: '关系已删除',
+      anchorOccupied: '该锚点已被其他关系线占用，不能落在这里',
       relationUpdated: '关系基数已更新',
       saveFailed: '保存失败，请重试',
       enterFieldName: '请输入字段名',
@@ -417,7 +418,8 @@ export default {
       saveModel: '保存模型',
       autoLayout: '自动布局',
       exportDoc: '导出文档',
-      openSettings: '打开设置'
+      openSettings: '打开设置',
+      globalSearch: '全局搜索'
     },
     about: {
       version: '版本 v0.1.0',

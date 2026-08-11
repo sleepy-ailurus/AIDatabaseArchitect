@@ -1,24 +1,18 @@
 <template>
   <div class="table-node-wrap" :class="{ selected: selected }">
-    <!-- Top anchor points (dynamic per index) -->
-    <template v-for="i in handleCounts.top.target" :key="'top-t-' + i">
-      <Handle
-        type="target"
-        :position="Position.Top"
-        :id="`top-target-${i - 1}`"
-        class="table-anchor"
-        :style="topHandleStyle(i - 1, handleCounts.top.target, 'target')"
-      />
-    </template>
-    <template v-for="i in handleCounts.top.source" :key="'top-s-' + i">
-      <Handle
-        type="source"
-        :position="Position.Top"
-        :id="`top-source-${i - 1}`"
-        class="table-anchor"
-        :style="topHandleStyle(i - 1, handleCounts.top.source, 'source')"
-      />
-    </template>
+    <!-- Exactly four anchors: one in the middle of each side. The source/target
+         handles of the same side overlap at the same spot, so only four dots
+         are visible and every edge reuses these fixed anchor ids. -->
+    <Handle
+      type="source"
+      :position="Position.Top"
+      id="top-source-0"
+      class="table-anchor"
+      :connectable="!isOccupied('top-source-0')"
+      :class="{ 'occupied-anchor': isOccupied('top-source-0') }"
+      @mousedown="onHandleMouseDown($event, 'top-source-0')"
+      :style="anchorStyle(undefined, 'top-source-0')"
+    />
 
     <div class="node-header" :style="headerStyle">
       <div class="node-title">
@@ -86,72 +80,48 @@
       </div>
     </div>
 
-    <!-- Bottom anchor points (dynamic per index) -->
-    <template v-for="i in handleCounts.bottom.target" :key="'bot-t-' + i">
-      <Handle
-        type="target"
-        :position="Position.Bottom"
-        :id="`bottom-target-${i - 1}`"
-        class="table-anchor"
-        :style="bottomHandleStyle(i - 1, handleCounts.bottom.target, 'target')"
-      />
-    </template>
-    <template v-for="i in handleCounts.bottom.source" :key="'bot-s-' + i">
-      <Handle
-        type="source"
-        :position="Position.Bottom"
-        :id="`bottom-source-${i - 1}`"
-        class="table-anchor"
-        :style="bottomHandleStyle(i - 1, handleCounts.bottom.source, 'source')"
-      />
-    </template>
+    <!-- Bottom anchor points -->
+    <Handle
+      type="source"
+      :position="Position.Bottom"
+      id="bottom-source-0"
+      class="table-anchor"
+      :connectable="!isOccupied('bottom-source-0')"
+      :class="{ 'occupied-anchor': isOccupied('bottom-source-0') }"
+      @mousedown="onHandleMouseDown($event, 'bottom-source-0')"
+      :style="anchorStyle(undefined, 'bottom-source-0')"
+    />
 
-    <!-- Left anchor points (dynamic per index) -->
-    <template v-for="i in handleCounts.left.target" :key="'left-t-' + i">
-      <Handle
-        type="target"
-        :position="Position.Left"
-        :id="`left-target-${i - 1}`"
-        class="table-anchor"
-        :style="leftHandleStyle(i - 1, handleCounts.left.target)"
-      />
-    </template>
-    <template v-for="i in handleCounts.left.source" :key="'left-s-' + i">
-      <Handle
-        type="source"
-        :position="Position.Left"
-        :id="`left-source-${i - 1}`"
-        class="table-anchor"
-        :style="leftHandleStyle(i - 1, handleCounts.left.source)"
-      />
-    </template>
+    <!-- Left anchor points -->
+    <Handle
+      type="source"
+      :position="Position.Left"
+      id="left-source-0"
+      class="table-anchor"
+      :connectable="!isOccupied('left-source-0')"
+      :class="{ 'occupied-anchor': isOccupied('left-source-0') }"
+      @mousedown="onHandleMouseDown($event, 'left-source-0')"
+      :style="anchorStyle(undefined, 'left-source-0')"
+    />
 
-    <!-- Right anchor points (dynamic per index) -->
-    <template v-for="i in handleCounts.right.target" :key="'right-t-' + i">
-      <Handle
-        type="target"
-        :position="Position.Right"
-        :id="`right-target-${i - 1}`"
-        class="table-anchor"
-        :style="rightHandleStyle(i - 1, handleCounts.right.target)"
-      />
-    </template>
-    <template v-for="i in handleCounts.right.source" :key="'right-s-' + i">
-      <Handle
-        type="source"
-        :position="Position.Right"
-        :id="`right-source-${i - 1}`"
-        class="table-anchor"
-        :style="rightHandleStyle(i - 1, handleCounts.right.source)"
-      />
-    </template>
+    <!-- Right anchor points -->
+    <Handle
+      type="source"
+      :position="Position.Right"
+      id="right-source-0"
+      class="table-anchor"
+      :connectable="!isOccupied('right-source-0')"
+      :class="{ 'occupied-anchor': isOccupied('right-source-0') }"
+      @mousedown="onHandleMouseDown($event, 'right-source-0')"
+      :style="anchorStyle(undefined, 'right-source-0')"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, nextTick, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Handle, Position } from '@vue-flow/core'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { ElMessageBox, ElMessage } from 'element-plus'
 
 const { t } = useI18n()
@@ -165,73 +135,61 @@ const props = defineProps({
 const emit = defineEmits(['rename'])
 
 const nodeActions = inject('nodeActions', null)
-// Map<nodeId, { top:{source:N, target:N}, right:{...}, bottom:{...}, left:{...} }>
-const nodeHandleCounts = inject('nodeHandleCounts', new Map())
+// Set of `${nodeId}|${handleId}` for anchors already used by an edge. Those
+// anchors cannot start a new connection; pressing one reconnects its edge.
+const occupiedHandleKeys = inject('occupiedHandleKeys', null)
+const { getEdges } = useVueFlow()
+
+const isOccupied = (handleId) => {
+  if (occupiedHandleKeys?.value?.has(`${String(props.id)}|${handleId}`)) return true
+  // Fallback: derive directly from the edges so the cursor / connectable state
+  // can never go stale even if the injected set lags behind.
+  return getEdges.value.some(e =>
+    (String(e.source) === String(props.id) && e.sourceHandle === handleId) ||
+    (String(e.target) === String(props.id) && e.targetHandle === handleId)
+  )
+}
+
+// Occupied anchors must stay clickable (Vue Flow's base handle style is
+// pointer-events:none when not connectable) and show the move cursor. Inline
+// styles win over any stylesheet rule, so this cannot be overridden.
+const anchorStyle = (baseStyle, handleId) => {
+  return isOccupied(handleId)
+    ? [baseStyle || {}, { cursor: 'move', pointerEvents: 'all' }]
+    : baseStyle
+}
+
+// Pressing an occupied anchor must not drag the node or start a new connection:
+// forward the press to this edge's built-in updater handle so Vue Flow runs its
+// default reconnect flow (hide the edge, draw the temporary line, restore).
+const onHandleMouseDown = (event, handleId) => {
+  if (!isOccupied(handleId)) return
+  const edge = getEdges.value.find(e =>
+    (String(e.source) === String(props.id) && e.sourceHandle === handleId) ||
+    (String(e.target) === String(props.id) && e.targetHandle === handleId)
+  )
+  if (!edge) return
+  event.preventDefault()
+  event.stopPropagation()
+  const anchorType =
+    String(edge.source) === String(props.id) && edge.sourceHandle === handleId
+      ? 'source'
+      : 'target'
+  const edgeAnchor = document.querySelector(
+    `.vue-flow__edge[data-id="${CSS.escape(String(edge.id))}"] .vue-flow__edgeupdater-${anchorType}`
+  )
+  if (edgeAnchor) {
+    edgeAnchor.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: event.clientX,
+      clientY: event.clientY
+    }))
+  }
+}
 
 const maxDisplay = 12
-
-// How many handles exist on each side/type for this node.
-// Fallback to at least 1 so users can still drag new connections from empty nodes.
-const handleCounts = computed(() => {
-  const counts = nodeHandleCounts?.get?.(String(props.id)) || null
-  const fallback = { source: 1, target: 1 }
-  return {
-    top: counts?.top || fallback,
-    right: counts?.right || fallback,
-    bottom: counts?.bottom || fallback,
-    left: counts?.left || fallback
-  }
-})
-
-// Vertical spacing step used between side handles (left/right)
-const V_STEP = 14 // px between consecutive handles on the same vertical side
-// Horizontal spacing step used between top/bottom handles
-const H_STEP = 18 // px between consecutive handles on the same horizontal side
-
-// Left/Right handles: spread vertically centered around 50%, offset by index
-const leftHandleStyle = (idx, total) => {
-  const n = Math.max(1, total)
-  // If total=1, center is 50%. Otherwise spread around center.
-  const baseOffset = n === 1 ? 0 : (idx - (n - 1) / 2) * V_STEP
-  return {
-    top: `calc(50% + ${baseOffset}px)`,
-    left: '0',
-    transform: 'translate(-50%, -50%)'
-  }
-}
-const rightHandleStyle = (idx, total) => {
-  const n = Math.max(1, total)
-  const baseOffset = n === 1 ? 0 : (idx - (n - 1) / 2) * V_STEP
-  return {
-    top: `calc(50% + ${baseOffset}px)`,
-    right: '0',
-    transform: 'translate(50%, -50%)'
-  }
-}
-// Top/Bottom handles: spread horizontally centered around 50%
-const topHandleStyle = (idx, total, kind) => {
-  const n = Math.max(1, total)
-  // kind target on left half, source on right half → combine into one center distribution
-  const combinedIdx = kind === 'target' ? idx : idx + 0.5
-  const totalShift = n === 1 ? 0 : (combinedIdx - (n - 1) / 2) * H_STEP
-  // Slight vertical offset so target handles sit slightly above source handles visually
-  const topPx = kind === 'target' ? 0 : 0
-  return {
-    left: `calc(50% + ${totalShift}px)`,
-    top: `${topPx}px`,
-    transform: 'translate(-50%, -50%)'
-  }
-}
-const bottomHandleStyle = (idx, total, kind) => {
-  const n = Math.max(1, total)
-  const combinedIdx = kind === 'target' ? idx : idx + 0.5
-  const totalShift = n === 1 ? 0 : (combinedIdx - (n - 1) / 2) * H_STEP
-  return {
-    left: `calc(50% + ${totalShift}px)`,
-    bottom: '-12px',
-    transform: 'translate(-50%, 50%)'
-  }
-}
 
 const editing = ref(false)
 const localName = ref('')
@@ -312,6 +270,11 @@ const handleMenuCommand = async (cmd) => {
 
 <style lang="scss" scoped>
 @use '@/styles/variables.scss' as *;
+
+.occupied-anchor {
+  cursor: move;
+  pointer-events: all;
+}
 
 .table-node-wrap {
   width: 240px;
@@ -511,55 +474,22 @@ const handleMenuCommand = async (cmd) => {
   z-index: 5;
   transform: translate(-50%, -50%);
 
-  &:hover {
-    opacity: 1 !important;
-    transform: translate(-50%, -50%) scale(1.3);
+  // Push all four anchors slightly outside the node edge so the line-end
+  // markers (crow's foot) are never clipped by the table body.
+  &.vue-flow__handle-top {
+    transform: translate(-50%, calc(-50% - 6px));
   }
 
-  &.top-anchor-left {
-    top: 0px;
-    left: 50%;
+  &.vue-flow__handle-right {
+    transform: translate(calc(50% + 6px), -50%);
   }
 
-  &.top-anchor-right {
-    top: 0px;
-    left: 50%;
+  &.vue-flow__handle-bottom {
+    transform: translate(-50%, calc(50% + 6px));
   }
 
-  &.bottom-anchor-left {
-    bottom: -12px;
-    left: 50%;
-  }
-
-  &.bottom-anchor-right {
-    bottom: -12px;
-    left: 50%;
-  }
-
-  &.side-anchor {
-    &.left-target {
-      left: 0;
-      top: 50%;
-      transform: translate(-50%, -50%);
-    }
-
-    &.left-source {
-      left: 0;
-      top: 50%;
-      transform: translate(-50%, -50%);
-    }
-
-    &.right-target {
-      right: 0;
-      top: 50%;
-      transform: translate(50%, -50%);
-    }
-
-    &.right-source {
-      right: 0;
-      top: 50%;
-      transform: translate(50%, -50%);
-    }
+  &.vue-flow__handle-left {
+    transform: translate(calc(-50% - 6px), -50%);
   }
 }
 
