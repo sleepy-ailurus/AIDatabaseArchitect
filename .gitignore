@@ -1,0 +1,32 @@
+# ============ Frontend (Vue / Vite) ============
+frontend/node_modules/
+frontend/dist/
+
+# ============ Backend (Python / uv) ============
+backend/__pycache__/
+backend/*.pyc
+backend/.venv/
+
+# ============ IDE / OS ============
+.vscode/
+.idea/
+.DS_Store
+
+# ============ Logs & local data ============
+*.log
+backend/app.db
+.workbuddy/
+
+# ============ Temporary build outputs ============
+# 连字符变体：dist-new / dist-verify / .build-check ...
+frontend/dist-*/
+frontend/.build-*/
+# 下划线变体：dist_tmp_* / dist_old_*（你之前被误收的主力）
+frontend/dist_*/
+
+# ============ Scratch / debug scripts ============
+# 一次性调试脚本，非项目源码
+frontend/test-*.mjs
+frontend/verify-fix.mjs
+# Vite 自动生成的临时配置
+frontend/vite.config.js.timestamp-*.mjs

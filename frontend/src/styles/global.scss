@@ -1,0 +1,186 @@
+@use 'variables.scss' as *;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: $text-primary;
+  background-color: $bg-color;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+
+  &:hover {
+    background: #94A3B8;
+  }
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.page-container {
+  padding: 20px;
+  height: 100%;
+  overflow: auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+
+  .page-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .page-subtitle {
+    font-size: 13px;
+    color: $text-secondary;
+    margin-top: 4px;
+  }
+}
+
+.card {
+  background: $bg-white;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+  padding: 24px;
+
+  & + & {
+    margin-top: 16px;
+  }
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+
+.text-primary { color: $primary-color; }
+.text-success { color: $success-color; }
+.text-warning { color: $warning-color; }
+.text-danger { color: $danger-color; }
+.text-secondary { color: $text-secondary; }
+
+.confidence-tag {
+  &.high {
+    --el-tag-bg-color: rgba(16, 185, 129, 0.1);
+    --el-tag-border-color: rgba(16, 185, 129, 0.2);
+    --el-tag-text-color: #059669;
+  }
+  &.medium {
+    --el-tag-bg-color: rgba(245, 158, 11, 0.1);
+    --el-tag-border-color: rgba(245, 158, 11, 0.2);
+    --el-tag-text-color: #D97706;
+  }
+  &.low {
+    --el-tag-bg-color: rgba(239, 68, 68, 0.1);
+    --el-tag-border-color: rgba(239, 68, 68, 0.2);
+    --el-tag-text-color: #DC2626;
+  }
+}
+
+// 深色模式基础覆盖（与 Element Plus dark/css-vars.css 配合）
+html.dark {
+  color-scheme: dark;
+
+  body,
+  #app {
+    background-color: #252526 !important;
+    color: #e2e8f0 !important;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+
+    &:hover {
+      background: #64748b;
+    }
+  }
+
+  .page-container,
+  .card {
+    background-color: #252526 !important;
+    color: #e2e8f0 !important;
+    border-color: #3c3c3c !important;
+  }
+
+  .page-title {
+    color: #f8fafc !important;
+  }
+
+  .page-subtitle {
+    color: #94a3b8 !important;
+  }
+
+  .text-secondary {
+    color: #94a3b8 !important;
+  }
+
+  // 覆盖页面内常见的硬编码浅色文字，避免在深色卡片上对比度不足
+  .page-container [style*="color: #64748B"],
+  .page-container [style*="color: rgb(100, 116, 139)"] {
+    color: #94a3b8 !important;
+  }
+
+  .page-container [style*="color: #94A3B8"],
+  .page-container [style*="color: rgb(148, 163, 184)"] {
+    color: #94a3b8 !important;
+  }
+
+  .page-container [style*="color: #CBD5E1"],
+  .page-container [style*="color: rgb(203, 213, 225)"] {
+    color: #94a3b8 !important;
+  }
+}
