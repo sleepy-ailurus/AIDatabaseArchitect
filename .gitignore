@@ -6,6 +6,10 @@ frontend/dist/
 backend/__pycache__/
 backend/*.pyc
 backend/.venv/
+backend/build_pwv/
+backend/dist_pwv/
+backend/app/__pycache__/
+backend/app/*.pyc
 
 # ============ IDE / OS ============
 .vscode/
@@ -30,3 +34,4 @@ frontend/test-*.mjs
 frontend/verify-fix.mjs
 # Vite 自动生成的临时配置
 frontend/vite.config.js.timestamp-*.mjs
+Installer/
