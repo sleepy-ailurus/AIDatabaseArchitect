@@ -112,3 +112,11 @@ If you have questions or run into issues, feel free to open an [issue](https://g
 ## License
 
 [MIT](LICENSE)
+
+
+📬 联系与交流
+如果你对这个项目感兴趣，或者有任何新奇的点子，欢迎通过以下方式找到我：
+
+💬 讨论区 (Discussions)：欢迎在这里提出功能建议、交流想法或脑洞（这是首选）。
+
+📧 欢迎交流合作：QQ : 1104219140@qq.com
