@@ -115,7 +115,12 @@ def cancel_analysis_task(task_id: int, db: Session = Depends(get_db)):
     if not task:
         raise HTTPException(status_code=404, detail="分析任务不存在")
     if task.status in ("completed", "failed", "cancelled"):
-        raise HTTPException(status_code=400, detail=f"任务已{task.status}，无法取消")
+        # Idempotent: the task already reached a terminal state. Returning the
+        # task with 200 keeps the frontend cancel flow simple and avoids a
+        # confusing 400 error when the user clicks cancel after a slow run
+        # already finished/failed server-side.
+        db.refresh(task)
+        return task
     task.status = "cancelled"
     task.error = "用户取消了分析任务"
     db.commit()
@@ -201,6 +206,7 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
         try:
             from app.services.schema_parser import schema_from_dict
             from app.services.relation_candidate import (
+                _extract_hint,
                 generate_candidates,
                 normalize_relationship_direction,
             )
@@ -211,7 +217,11 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
             rule_uncovered = 0
             for c in rule_candidates:
                 st, sc, tt, tc, _card = normalize_relationship_direction(
-                    c.source_table, c.source_column, c.target_table, c.target_column
+                    c.source_table,
+                    c.source_column,
+                    c.target_table,
+                    c.target_column,
+                    c.cardinality,
                 )
                 key = (st.lower(), sc.lower(), tt.lower(), tc.lower())
                 if key in existing_keys:
@@ -223,17 +233,51 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
             rule_total = None
             rule_uncovered = None
 
-        # Fast path: rule heuristic produced candidates AND every one of them is
-        # already covered by an existing relationship (explicit FK / manual edge /
-        # prior AI confirmation). This means the obvious naming-convention-driven
-        # relations (xxx_id -> xxx_table) are already exhaustive; the LLM would
-        # essentially just restate what we already have. Skip it, save tokens.
-        #
-        # Important: we DO NOT skip when rule_total == 0 (e.g. column names use
-        # abbreviation hints like "dept_id" vs table "sys_department" — rules can't
-        # match them). In that case the LLM is MORE valuable because it's the only
-        # node that can still recover FK-like links from semantic column context.
-        if rule_total is not None and rule_total > 0 and rule_uncovered == 0:
+        schema_table_names = {t.name.lower() for t in parsed_schema.tables}
+        covered_tables: set[str] = set()
+        for st, _sc, tt, _tc in existing_keys:
+            covered_tables.add(st)
+            covered_tables.add(tt)
+        covered_tables &= schema_table_names
+        table_count = len(schema_table_names)
+
+        # A rule-uncovered column still worth an LLM discovery pass: the rules
+        # matched some candidates (all already covered) but other reference-like
+        # columns (xxx_id / xxx_code / ...) remain unconnected, or no rule
+        # candidates were generated at all (abbreviations, semantic columns).
+        # Only when every reference-like column already participates in an
+        # existing relationship is the schema genuinely "full coverage" — in that
+        # case both the rules and a free-form LLM call would only restate what we
+        # already have, so we skip to save tokens.
+        all_ref_columns_covered = True
+        for t in parsed_schema.tables:
+            for c in t.columns:
+                if c.is_primary_key:
+                    continue
+                if _extract_hint(c.name) is None:
+                    continue
+                covered_col = any(
+                    (t.name.lower() == st or t.name.lower() == tt)
+                    and c.name.lower() in (sc, tc)
+                    for st, sc, tt, tc in existing_keys
+                )
+                if not covered_col:
+                    all_ref_columns_covered = False
+                    break
+            if not all_ref_columns_covered:
+                break
+
+        rules_exhausted = (rule_total is not None and rule_total > 0 and rule_uncovered == 0) or (
+            rule_total is not None and rule_total == 0 and all_ref_columns_covered
+        )
+
+        # Fast path: the naming-convention coverage is truly exhaustive AND every
+        # table already participates in some relationship. Skip the LLM call.
+        if (
+            rules_exhausted
+            and table_count > 0
+            and len(covered_tables) >= table_count
+        ):
             db.close()
             sdb = SessionLocal()
             try:
@@ -287,6 +331,7 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
             run_llm=run_llm,
             existing_keys=existing_keys,
             db_session_factory=SessionLocal,
+            task_id=task_id,
             progress=progress_cb,
         )
 
@@ -295,6 +340,10 @@ def _run_analysis(task_id: int, project_id: int, llm_config_id: int | None, run_
         try:
             t = sdb.get(AnalysisTask, task_id)
             if not t:
+                return
+            if t.status == "cancelled":
+                # User cancelled while the workflow was finishing; never
+                # overwrite the cancelled state with a late result.
                 return
             if summary.get("error"):
                 t.status = "failed"

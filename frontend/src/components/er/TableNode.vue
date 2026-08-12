@@ -1,17 +1,19 @@
 <template>
   <div class="table-node-wrap" :class="{ selected: selected }">
-    <!-- Exactly four anchors: one in the middle of each side. The source/target
-         handles of the same side overlap at the same spot, so only four dots
-         are visible and every edge reuses these fixed anchor ids. -->
+    <!-- Twelve anchors: three evenly distributed along each side (25% / 50% /
+         75% of the edge length). Handles act as both source and target (loose
+         connection mode), so every edge reuses these fixed anchor ids. -->
     <Handle
+      v-for="anchor in anchors"
+      :key="anchor.id"
       type="source"
-      :position="Position.Top"
-      id="top-source-0"
+      :position="anchor.position"
+      :id="anchor.id"
       class="table-anchor"
-      :connectable="!isOccupied('top-source-0')"
-      :class="{ 'occupied-anchor': isOccupied('top-source-0') }"
-      @mousedown="onHandleMouseDown($event, 'top-source-0')"
-      :style="anchorStyle(undefined, 'top-source-0')"
+      :connectable="!isOccupied(anchor.id)"
+      :class="{ 'occupied-anchor': isOccupied(anchor.id) }"
+      @mousedown="onHandleMouseDown($event, anchor.id)"
+      :style="anchorStyle(anchor.style, anchor.id)"
     />
 
     <div class="node-header" :style="headerStyle">
@@ -80,41 +82,6 @@
       </div>
     </div>
 
-    <!-- Bottom anchor points -->
-    <Handle
-      type="source"
-      :position="Position.Bottom"
-      id="bottom-source-0"
-      class="table-anchor"
-      :connectable="!isOccupied('bottom-source-0')"
-      :class="{ 'occupied-anchor': isOccupied('bottom-source-0') }"
-      @mousedown="onHandleMouseDown($event, 'bottom-source-0')"
-      :style="anchorStyle(undefined, 'bottom-source-0')"
-    />
-
-    <!-- Left anchor points -->
-    <Handle
-      type="source"
-      :position="Position.Left"
-      id="left-source-0"
-      class="table-anchor"
-      :connectable="!isOccupied('left-source-0')"
-      :class="{ 'occupied-anchor': isOccupied('left-source-0') }"
-      @mousedown="onHandleMouseDown($event, 'left-source-0')"
-      :style="anchorStyle(undefined, 'left-source-0')"
-    />
-
-    <!-- Right anchor points -->
-    <Handle
-      type="source"
-      :position="Position.Right"
-      id="right-source-0"
-      class="table-anchor"
-      :connectable="!isOccupied('right-source-0')"
-      :class="{ 'occupied-anchor': isOccupied('right-source-0') }"
-      @mousedown="onHandleMouseDown($event, 'right-source-0')"
-      :style="anchorStyle(undefined, 'right-source-0')"
-    />
   </div>
 </template>
 
@@ -133,6 +100,34 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['rename'])
+
+// Three anchors per side, evenly distributed along the edge (25% / 50% / 75%).
+// Top/bottom anchors spread horizontally (left), left/right anchors spread
+// vertically (top). The `-0/-1/-2` suffix is the stable anchor id used by
+// edges, occupied-anchor tracking and the reconnect flow.
+const ANCHOR_OFFSETS = ['25%', '50%', '75%']
+const anchors = [
+  ...ANCHOR_OFFSETS.map((off, i) => ({
+    id: `top-source-${i}`,
+    position: Position.Top,
+    style: { left: off }
+  })),
+  ...ANCHOR_OFFSETS.map((off, i) => ({
+    id: `right-source-${i}`,
+    position: Position.Right,
+    style: { top: off }
+  })),
+  ...ANCHOR_OFFSETS.map((off, i) => ({
+    id: `bottom-source-${i}`,
+    position: Position.Bottom,
+    style: { left: off }
+  })),
+  ...ANCHOR_OFFSETS.map((off, i) => ({
+    id: `left-source-${i}`,
+    position: Position.Left,
+    style: { top: off }
+  }))
+]
 
 const nodeActions = inject('nodeActions', null)
 // Set of `${nodeId}|${handleId}` for anchors already used by an edge. Those
@@ -474,7 +469,7 @@ const handleMenuCommand = async (cmd) => {
   z-index: 5;
   transform: translate(-50%, -50%);
 
-  // Push all four anchors slightly outside the node edge so the line-end
+  // Push all anchors slightly outside the node edge so the line-end
   // markers (crow's foot) are never clipped by the table body.
   &.vue-flow__handle-top {
     transform: translate(-50%, calc(-50% - 5px));

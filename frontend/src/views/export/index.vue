@@ -559,3 +559,106 @@ onMounted(() => {
   word-break: break-word;
 }
 </style>
+
+<style lang="scss">
+html.dark {
+  .export-page {
+    background: #252526;
+  }
+
+  .export-header {
+    background: #252526;
+    border-bottom-color: #3c3c3c;
+
+    .title {
+      color: #f8fafc;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+    }
+  }
+
+  .doc-toc {
+    background: #252526;
+    border-right-color: #3c3c3c;
+  }
+
+  .toc-head {
+    border-bottom-color: #3c3c3c;
+
+    > span {
+      color: #f8fafc;
+    }
+  }
+
+  .toc-node {
+    color: #cbd5e1;
+  }
+
+  .node-num {
+    background: #3c3c3c;
+    color: #94a3b8;
+  }
+
+  .toc-tree .el-tree-node__content:hover {
+    background: #3c3c3c;
+  }
+
+  .toc-tree .is-current > .el-tree-node__content {
+    background: rgba(59, 130, 246, 0.15);
+  }
+
+  .toc-foot {
+    background: #2a2a2b;
+    border-top-color: #3c3c3c;
+  }
+
+  .doc-stats .stat-row {
+    span {
+      color: #94a3b8;
+    }
+
+    strong {
+      color: #f8fafc;
+    }
+  }
+
+  .doc-preview {
+    background: #1e1e1e;
+  }
+
+  .md-content {
+    background: #252526;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+    h1,
+    h2,
+    h3 {
+      color: #f8fafc;
+    }
+
+    p {
+      color: #cbd5e1;
+
+      code {
+        background: #3c3c3c;
+        color: #a5b4fc;
+      }
+    }
+
+    table {
+      th {
+        background: #2a2a2b;
+        color: #cbd5e1;
+        border-bottom-color: #3c3c3c;
+      }
+
+      td {
+        border-bottom-color: #3c3c3c;
+        color: #cbd5e1;
+      }
+    }
+  }
+}
+</style>

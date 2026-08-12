@@ -29,6 +29,22 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _migrate_llm_configs()
+    _migrate_projects()
+
+
+def _migrate_projects() -> None:
+    """Add the db_type column to an existing projects table (idempotent)."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "projects" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("projects")}
+    if "db_type" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE projects ADD COLUMN db_type VARCHAR(32) NOT NULL DEFAULT 'mysql'"
+            ))
 
 
 def _migrate_llm_configs() -> None:
@@ -51,6 +67,21 @@ def _migrate_llm_configs() -> None:
         with engine.begin() as conn:
             conn.execute(text(
                 "ALTER TABLE llm_configs ADD COLUMN rate_unlimited BOOLEAN NOT NULL DEFAULT 0"
+            ))
+    if "endpoint_path" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE llm_configs ADD COLUMN endpoint_path VARCHAR(255) NOT NULL DEFAULT '/chat/completions'"
+            ))
+            conn.execute(text(
+                "UPDATE llm_configs SET endpoint_path = '/v1/chat/completions' WHERE provider = 'ollama'"
+            ))
+    else:
+        # Migrate older Ollama configs from the native /api/chat endpoint to the
+        # OpenAI-compatible /v1/chat/completions endpoint used by the app.
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE llm_configs SET endpoint_path = '/v1/chat/completions' WHERE provider = 'ollama' AND endpoint_path = '/api/chat'"
             ))
 
 

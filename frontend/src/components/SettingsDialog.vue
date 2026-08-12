@@ -88,8 +88,12 @@
                         :label="provider.id"
                         @change="activeProviderId = provider.id; selectProvider(provider)"
                         @click.stop
+                        :title="t('llm.defaultTag')"
                       />
                       <span class="provider-name">{{ provider.name }}</span>
+                      <el-tag v-if="provider.is_default" type="primary" size="small" class="default-tag" effect="light">
+                        {{ t('llm.defaultTag') }}
+                      </el-tag>
                     </div>
                     <div class="card-header-right">
                       <el-switch
@@ -168,7 +172,8 @@
                               <span class="ref-label">{{ t('llm.provider.endpoint') }}:</span>
                               <el-radio-group v-model="provider.endpoint_path" size="small">
                                 <template v-if="provider.protocol === 'Ollama'">
-                                  <el-radio-button value="/api/chat">/api/chat</el-radio-button>
+                                  <el-radio-button value="/v1/chat/completions">/v1/chat/completions</el-radio-button>
+                                  <el-radio-button value="/api/chat">/api/chat (legacy)</el-radio-button>
                                 </template>
                                 <template v-else>
                                   <el-radio-button value="/chat/completions">/chat/completions</el-radio-button>
@@ -208,33 +213,17 @@
 
                     <div class="body-section">
                       <div class="field-label">{{ t('llm.provider.apiKey') }}</div>
-                      <div class="key-input-wrap">
-                        <el-input
-                          v-if="!provider._keyMasked"
-                          v-model="provider.api_key"
-                          type="password"
-                          show-password
-                          clearable
-                          :placeholder="t('llm.provider.apiKey')"
-                          @input="onKeyInput(provider)"
-                        />
-                        <div v-else class="key-masked-display">
-                          <span class="key-masked-text" :class="{ reveal: showKeyMap[provider.id] }">{{ provider.api_key }}</span>
-                          <el-icon
-                            class="key-toggle"
-                            @click="toggleKeyVisibility(provider.id)"
-                          >
-                            <View v-if="showKeyMap[provider.id]" />
-                            <Hide v-else />
-                          </el-icon>
-                          <el-icon
-                            class="key-clear"
-                            @click="clearKey(provider)"
-                          >
-                            <Close />
-                          </el-icon>
-                        </div>
-                      </div>
+                      <el-input
+                        v-model="provider.api_key"
+                        type="password"
+                        :show-password="!provider._keyMasked && provider.protocol !== 'Ollama'"
+                        :disabled="provider.protocol === 'Ollama'"
+                        clearable
+                        :placeholder="provider.protocol === 'Ollama' ? t('llm.provider.apiKeyNotNeeded') : t('llm.provider.apiKey')"
+                        @input="onKeyInput(provider)"
+                        @clear="onKeyInput(provider)"
+                        @focus="onKeyFocus(provider, $event)"
+                      />
                     </div>
 
                     <div class="body-section inline-fields">
@@ -358,8 +347,8 @@
               {{ t('settings.about.desc') }}
             </div>
             <div class="about-links">
-              <a class="about-todo-link" href="https://github.com/sleepy-aliurus/AIDatabaseArchitect/issues" target="_blank" rel="noopener"><el-icon><ChatDotRound /></el-icon> {{ t('settings.about.feedback') }}</a>
-              <a class="about-todo-link" href="https://github.com/sleepy-aliurus/AIDatabaseArchitect" target="_blank" rel="noopener"><el-icon><InfoFilled /></el-icon> {{ t('settings.about.changelog') }}</a>
+              <a class="about-todo-link" href="https://github.com/sleepy-ailurus/AIDatabaseArchitect/issues" target="_blank" rel="noopener"><el-icon><ChatDotRound /></el-icon> {{ t('settings.about.feedback') }}</a>
+              <a class="about-todo-link" href="https://github.com/sleepy-ailurus/AIDatabaseArchitect" target="_blank" rel="noopener"><el-icon><InfoFilled /></el-icon> {{ t('settings.about.changelog') }}</a>
             </div>
           </div>
         </template>
@@ -463,20 +452,19 @@ const presetUrls = [
   { label: 'Ollama', value: 'http://localhost:11434' }
 ]
 
-const showKeyMap = reactive({})
-
 const providers = reactive([])
 
 const mapApiToProvider = (raw) => {
   const apiKey = raw.api_key_masked || ''
   const protocol = raw.provider === 'ollama' ? 'Ollama' : 'OpenAI'
+  const defaultEndpoint = raw.provider === 'ollama' ? '/v1/chat/completions' : '/chat/completions'
   return {
     id: raw.id,
     name: raw.name || '',
     enabled: raw.is_active ?? true,
     is_default: raw.is_default ?? false,
     protocol,
-    endpoint_path: '/chat/completions',
+    endpoint_path: raw.endpoint_path || defaultEndpoint,
     base_url: raw.base_url || '',
     api_key: apiKey,
     _keyMasked: !!apiKey,
@@ -498,6 +486,7 @@ const mapProviderToApi = (provider, forTest = false) => {
     provider: provider.protocol === 'Ollama' ? 'ollama' : 'openai',
     base_url: provider.base_url,
     model: provider.models[0] || '',
+    endpoint_path: provider.endpoint_path,
     temperature: 0.2,
     max_tokens: 4096,
     timeout_seconds: provider.timeout,
@@ -508,17 +497,8 @@ const mapProviderToApi = (provider, forTest = false) => {
     is_default: provider.is_default || false,
     is_active: provider.enabled
   }
-  if (forTest) {
-    data.endpoint_path = provider.endpoint_path
-    if (!provider._keyMasked && provider.api_key) {
-      data.api_key = provider.api_key
-    } else if (provider._keyMasked) {
-      data.api_key = ''
-    }
-  } else {
-    if (!provider._keyMasked && provider.api_key) {
-      data.api_key = provider.api_key
-    }
+  if (provider.protocol !== 'Ollama' && !provider._keyMasked && provider.api_key) {
+    data.api_key = provider.api_key
   }
   return data
 }
@@ -558,16 +538,6 @@ const selectProvider = async (provider) => {
   }
 }
 
-const toggleKeyVisibility = (id) => {
-  showKeyMap[id] = !showKeyMap[id]
-}
-
-const clearKey = (provider) => {
-  provider.api_key = ''
-  provider._keyMasked = false
-  delete showKeyMap[provider.id]
-}
-
 const toggleEnabled = async (provider) => {
   if (provider._isNew || typeof provider.id !== 'number') return
   try {
@@ -580,17 +550,23 @@ const toggleEnabled = async (provider) => {
 }
 
 const onKeyInput = (provider) => {
-  if (provider.api_key) {
-    provider._keyMasked = false
+  provider._keyMasked = false
+}
+
+const onKeyFocus = (provider, e) => {
+  if (provider._keyMasked && provider.api_key && e?.target) {
+    e.target.select()
   }
 }
 
 const setProtocol = (provider, p) => {
   provider.protocol = p
   if (p === 'Ollama') {
-    provider.endpoint_path = '/api/chat'
+    provider.endpoint_path = '/v1/chat/completions'
+    provider.api_key = ''
+    provider._keyMasked = false
   } else {
-    if (provider.endpoint_path === '/api/chat') {
+    if (provider.endpoint_path === '/api/chat' || provider.endpoint_path === '/v1/chat/completions') {
       provider.endpoint_path = '/chat/completions'
     }
   }
@@ -665,17 +641,13 @@ const saveProvider = async (provider) => {
       const data = await saveLLMConfig(payload)
       if (data?.id) provider.id = data.id
       provider._isNew = false
-      provider._keyMasked = true
+      provider._keyMasked = !!provider.api_key
       ElMessage.success(t('llm.messages.configCreated'))
     } else {
       const updatePayload = mapProviderToApi(provider)
-      if (provider._keyMasked) {
-        delete updatePayload.api_key
-      }
       await updateLLMConfig(provider.id, updatePayload)
       if (updatePayload.api_key) {
         provider._keyMasked = true
-        provider.api_key = ''
       }
       ElMessage.success(t('llm.messages.configSaved'))
     }
@@ -688,10 +660,10 @@ const saveProvider = async (provider) => {
 
 const testProvider = async (provider) => {
   if (!provider.base_url) {
-    ElMessage.warning(t('llm.messages.needKey'))
+    ElMessage.warning(t('llm.messages.needBaseUrl'))
     return
   }
-  if (provider._keyMasked && !provider.api_key) {
+  if (provider.protocol !== 'Ollama' && !provider.api_key) {
     ElMessage.warning(t('llm.messages.needKey'))
     return
   }
@@ -703,9 +675,6 @@ const testProvider = async (provider) => {
   provider._testResult = null
   try {
     const payload = mapProviderToApi(provider, true)
-    if (provider._keyMasked && !provider.api_key) {
-      delete payload.api_key
-    }
     if (typeof provider.id === 'number' && !provider._isNew) {
       payload.config_id = provider.id
     }
@@ -1163,6 +1132,10 @@ onMounted(() => {
   color: $text-primary;
 }
 
+.default-tag {
+  margin-left: 4px;
+}
+
 .card-header-right {
   display: flex;
   align-items: center;
@@ -1329,6 +1302,7 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  margin-top: 6px;
 
   .ref-label {
     font-size: 13px;
@@ -1415,81 +1389,6 @@ onMounted(() => {
     background: rgba(59, 130, 246, 0.1);
     border-color: $primary-color;
     color: $primary-color;
-  }
-}
-
-.key-input-wrap {
-  position: relative;
-
-  .key-toggle {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: $text-placeholder;
-    cursor: pointer;
-    z-index: 1;
-
-    &:hover {
-      color: $text-regular;
-    }
-  }
-
-  .key-clear {
-    position: absolute;
-    right: 34px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: $text-placeholder;
-    cursor: pointer;
-    z-index: 1;
-    font-size: 14px;
-
-    &:hover {
-      color: #ef4444;
-    }
-  }
-
-  .el-input {
-    input {
-      padding-right: 36px;
-    }
-  }
-}
-
-.key-masked-display {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 0 12px;
-  border: 1px solid $border-light;
-  border-radius: 6px;
-  background: $bg-white;
-
-  .key-masked-text {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    font-family: 'SF Mono', Consolas, Monaco, monospace;
-    font-size: 13px;
-    color: $text-primary;
-    cursor: text;
-
-    &:not(.reveal) {
-      -webkit-text-security: disc;
-      letter-spacing: 2px;
-    }
-  }
-
-  .key-toggle,
-  .key-clear {
-    position: static;
-    transform: none;
-    font-size: 16px;
-    flex-shrink: 0;
   }
 }
 
@@ -1826,5 +1725,61 @@ html.dark .settings-root {
       background: rgba(59, 130, 246, 0.08);
     }
   }
+
+  :deep(.curl-collapse),
+  :deep(.ref-collapse) {
+    background: #252526;
+    border-color: #3c3c3c;
+  }
+
+  :deep(.ref-endpoint .ref-label) {
+    color: #e2e8f0;
+  }
+
+  :deep(.ref-url),
+  :deep(.full-url-value) {
+    color: #94a3b8;
+  }
+
+  :deep(.curl-title),
+  :deep(.ref-title) {
+    color: #e2e8f0;
+  }
+
+  :deep(.preset-tag) {
+    background: #2a2a2b;
+    border-color: #3c3c3c;
+    color: #94a3b8;
+
+    &:hover {
+      border-color: #60a5fa;
+      color: #60a5fa;
+    }
+
+    &.active {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: #3b82f6;
+      color: #60a5fa;
+    }
+  }
+
 }
+
+// Curl parse-preview dialog is teleported to <body>, so it is not inside
+// .settings-root; style it directly for dark mode.
+html.dark .curl-preview {
+  .curl-preview-row {
+    border-bottom-color: #3c3c3c;
+  }
+
+  .curl-label {
+    color: #94a3b8;
+  }
+
+  .curl-value {
+    color: #f8fafc;
+    background: rgba(59, 130, 246, 0.12);
+  }
+}
+
 </style>

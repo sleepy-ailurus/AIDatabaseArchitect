@@ -200,11 +200,10 @@
                 <el-tag size="small" type="success">{{ t('project.form.recommended') }}</el-tag>
               </div>
             </el-option>
-            <el-option label="PostgreSQL 14+" value="postgresql" disabled>
+            <el-option label="PostgreSQL 14+" value="postgresql">
               <div class="db-option">
                 <el-icon color="#336791"><Coin /></el-icon>
                 <span>PostgreSQL 14+</span>
-                <el-tag size="small" type="info">{{ t('connection.soonSupported') }}</el-tag>
               </div>
             </el-option>
           </el-select>

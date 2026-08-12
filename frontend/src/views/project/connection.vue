@@ -2,11 +2,11 @@
   <div class="connection-page">
     <div class="steps-header">
       <el-steps :active="currentStep" finish-status="success" align-center>
-        <el-step title="数据库连接" icon="Connection" />
-        <el-step title="Schema 解析" icon="DataAnalysis" />
-        <el-step title="ER 模型编辑" icon="Share" />
-        <el-step title="AI 关系确认" icon="MagicStick" />
-        <el-step title="文档导出" icon="Download" />
+        <el-step :title="t('connection.steps.dbConnection')" icon="Connection" />
+        <el-step :title="t('connection.steps.schemaParse')" icon="DataAnalysis" />
+        <el-step :title="t('connection.steps.erEdit')" icon="Share" />
+        <el-step :title="t('connection.steps.aiConfirm')" icon="MagicStick" />
+        <el-step :title="t('connection.steps.docExport')" icon="Download" />
       </el-steps>
     </div>
 
@@ -14,8 +14,8 @@
       <div class="left-panel">
         <div class="panel-title-section">
           <div>
-            <h2 class="panel-title">数据库连接配置</h2>
-            <p class="panel-desc">填写目标数据库的只读连接信息，系统将仅读取元数据</p>
+            <h2 class="panel-title">{{ t('connection.title') }}</h2>
+            <p class="panel-desc">{{ t('connection.desc') }}</p>
           </div>
           <div class="project-chip" v-if="projectName">
             <el-icon :size="16" color="#3B82F6"><FolderOpened /></el-icon>
@@ -26,13 +26,13 @@
         <div class="security-tip">
           <el-icon :size="18" color="#F59E0B"><Warning /></el-icon>
           <div class="tip-content">
-            <strong>安全提示：</strong>
-            <span>建议使用仅拥有 SELECT 和 SHOW VIEW 权限的只读账号进行连接。系统不会执行任何写入操作。</span>
+            <strong>{{ t('connection.securityTip') }}</strong>
+            <span>{{ t('connection.securityTipDesc') }}</span>
           </div>
         </div>
 
-        <el-form :model="form" :rules="rules" ref="formRef" label-width="110px" class="connection-form">
-          <el-form-item label="数据库类型" prop="db_type">
+        <el-form :model="form" :rules="rules" ref="formRef" :label-width="formLabelWidth" class="connection-form">
+          <el-form-item :label="t('connection.dbType')" prop="db_type">
             <el-radio-group v-model="form.db_type" class="type-group">
               <el-radio-button value="mysql">
                 <span class="radio-label">
@@ -40,48 +40,47 @@
                   MySQL 8.x
                 </span>
               </el-radio-button>
-              <el-radio-button value="postgresql" disabled>
+              <el-radio-button value="postgresql">
                 <span class="radio-label">
                   <span class="radio-dot pg"></span>
                   PostgreSQL
-                  <el-tag size="small" type="info" style="margin-left: 4px;">即将支持</el-tag>
                 </span>
               </el-radio-button>
             </el-radio-group>
           </el-form-item>
 
           <el-row :gutter="12">
-            <el-col :span="16">
-              <el-form-item label="主机地址" prop="host">
-                <el-input v-model="form.host" placeholder="例如：192.168.1.100 或 db.example.com">
+            <el-col :span="12">
+              <el-form-item :label="t('connection.host')" prop="host">
+                <el-input v-model="form.host" :placeholder="t('connection.hostPlaceholder')">
                   <template #prefix><el-icon><Monitor /></el-icon></template>
                 </el-input>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
-              <el-form-item label="端口" prop="port">
+            <el-col :span="12">
+              <el-form-item :label="t('connection.port')" prop="port">
                 <el-input-number v-model="form.port" :min="1" :max="65535" style="width: 100%;" />
               </el-form-item>
             </el-col>
           </el-row>
 
-          <el-form-item label="数据库名" prop="database_name">
-            <el-input v-model="form.database_name" placeholder="要分析的数据库名称">
+          <el-form-item :label="t('connection.databaseName')" prop="database_name">
+            <el-input v-model="form.database_name" :placeholder="t('connection.databaseNamePlaceholder')">
               <template #prefix><el-icon><Coin /></el-icon></template>
             </el-input>
           </el-form-item>
 
           <el-row :gutter="12">
             <el-col :span="12">
-              <el-form-item label="用户名" prop="username">
-                <el-input v-model="form.username" placeholder="数据库账号">
+              <el-form-item :label="t('connection.username')" prop="username">
+                <el-input v-model="form.username" :placeholder="t('connection.usernamePlaceholder')">
                   <template #prefix><el-icon><User /></el-icon></template>
                 </el-input>
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="密码" prop="password">
-                <el-input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="连接密码">
+              <el-form-item :label="t('connection.password')" prop="password">
+                <el-input v-model="form.password" :type="showPassword ? 'text' : 'password'" :placeholder="t('connection.passwordPlaceholder')">
                   <template #prefix><el-icon><Lock /></el-icon></template>
                   <template #suffix>
                     <el-button text @click="showPassword = !showPassword">
@@ -96,32 +95,42 @@
           </el-row>
 
           <el-divider content-position="left">
-            <span style="font-size: 13px; color: #64748B; font-weight: 500;">高级配置</span>
+            <span style="font-size: 13px; color: #64748B; font-weight: 500;">{{ t('connection.advanced') }}</span>
           </el-divider>
 
-          <el-form-item label="启用 SSL">
+          <el-form-item :label="t('connection.enableSSL')">
             <el-switch v-model="form.ssl" />
             <span style="margin-left: 8px; font-size: 12px; color: #94A3B8;">
-              使用加密连接传输数据
+              {{ t('connection.sslDesc') }}
             </span>
           </el-form-item>
 
-          <el-form-item label="连接超时">
-            <el-input-number v-model="form.timeout" :min="5" :max="300" :step="5" style="width: 160px;" />
-            <span style="margin-left: 8px; font-size: 12px; color: #94A3B8;">秒</span>
+          <el-form-item v-if="form.ssl" :label="t('connection.caCert')">
+            <el-input
+              v-model="form.ca"
+              type="textarea"
+              :rows="4"
+              style="width: 100%;"
+              :placeholder="t('connection.caPlaceholder')"
+            />
+          </el-form-item>
+
+          <el-form-item :label="t('connection.timeout')">
+            <el-input-number v-model="form.timeout" :min="5" :max="30" :step="5" style="width: 160px;" />
+            <span style="margin-left: 8px; font-size: 12px; color: #94A3B8;">{{ t('connection.timeoutUnit') }}</span>
           </el-form-item>
         </el-form>
 
         <div class="form-actions">
           <el-button @click="$router.back()">
-            <el-icon style="margin-right: 4px;"><ArrowLeft /></el-icon>返回
+            <el-icon style="margin-right: 4px;"><ArrowLeft /></el-icon>{{ t('connection.back') }}
           </el-button>
           <div>
             <el-button :icon="RefreshRight" :loading="testingConnection" @click="handleTestConnection">
-              测试连接
+              {{ t('connection.testConnection') }}
             </el-button>
             <el-button type="primary" :icon="VideoPlay" :loading="syncing" @click="handleSaveAndSync">
-              保存并同步 Schema
+              {{ t('connection.saveAndSync') }}
             </el-button>
           </div>
         </div>
@@ -130,15 +139,15 @@
       <div class="right-panel">
         <div class="test-result-section">
           <div class="section-title">
-            <span>连接测试结果</span>
+            <span>{{ t('connection.testResult') }}</span>
             <el-tag v-if="testPassed" size="small" type="success" effect="light">
-              <el-icon><CircleCheck /></el-icon> 连接成功
+              <el-icon><CircleCheck /></el-icon> {{ t('connection.connected') }}
             </el-tag>
             <el-tag v-else-if="testingConnection" size="small" type="warning" effect="light">
-              <el-icon class="el-icon--loading"><Loading /></el-icon> 测试中
+              <el-icon class="el-icon--loading"><Loading /></el-icon> {{ t('connection.testing') }}
             </el-tag>
-            <el-tag v-else-if="testFailed" size="small" type="danger" effect="light">连接失败</el-tag>
-            <el-tag v-else size="small" type="info" effect="light">未测试</el-tag>
+            <el-tag v-else-if="testFailed" size="small" type="danger" effect="light">{{ t('connection.connectionFailed') }}</el-tag>
+            <el-tag v-else size="small" type="info" effect="light">{{ t('connection.notTested') }}</el-tag>
           </div>
 
           <div class="check-list">
@@ -150,8 +159,8 @@
                 <el-icon v-else color="#CBD5E1"><Circle /></el-icon>
               </div>
               <div class="check-info">
-                <div class="check-name">{{ item.name }}</div>
-                <div class="check-detail" v-if="item.detail">{{ item.detail }}</div>
+                <div class="check-name">{{ checkText(item.name) }}</div>
+                <div class="check-detail" v-if="checkText(item.detail)">{{ checkText(item.detail) }}</div>
               </div>
               <div class="check-time" v-if="item.time">{{ item.time }}ms</div>
             </div>
@@ -160,48 +169,48 @@
           <div class="error-detail" v-if="errorMessage">
             <el-icon color="#EF4444"><WarningFilled /></el-icon>
             <div>
-              <div style="font-weight: 600; color: #DC2626; margin-bottom: 4px;">错误详情</div>
+              <div style="font-weight: 600; color: #DC2626; margin-bottom: 4px;">{{ t('connection.errorDetail') }}</div>
               <div style="font-size: 12px; color: #B91C1C;">{{ errorMessage }}</div>
-              <div class="error-type" v-if="errorType">错误类型: <code>{{ errorType }}</code></div>
+              <div class="error-type" v-if="errorType">{{ t('connection.errorType') }}: <code>{{ errorType }}</code></div>
             </div>
           </div>
         </div>
 
         <div class="preview-section" v-if="testPassed && dbPreview">
           <div class="section-title">
-            <span>数据库预览</span>
+            <span>{{ t('connection.dbPreview') }}</span>
           </div>
           <div class="db-info">
             <div class="info-row" v-if="dbPreview.version">
-              <span class="info-label">数据库版本</span>
+              <span class="info-label">{{ t('connection.dbVersion') }}</span>
               <span class="info-value">{{ dbPreview.version }}</span>
             </div>
             <div class="info-row" v-if="dbPreview.charset">
-              <span class="info-label">字符集</span>
+              <span class="info-label">{{ t('connection.charset') }}</span>
               <span class="info-value">{{ dbPreview.charset }}</span>
             </div>
             <div class="info-row highlight" v-if="dbPreview.table_count !== undefined">
-              <span class="info-label">表数量</span>
-              <span class="info-value strong">{{ dbPreview.table_count }} 张</span>
+              <span class="info-label">{{ t('connection.tableCount') }}</span>
+              <span class="info-value strong">{{ dbPreview.table_count }} {{ t('connection.tables') }}</span>
             </div>
             <div class="info-row highlight" v-if="dbPreview.view_count !== undefined">
-              <span class="info-label">视图数量</span>
-              <span class="info-value strong">{{ dbPreview.view_count }} 个</span>
+              <span class="info-label">{{ t('connection.viewCount') }}</span>
+              <span class="info-value strong">{{ dbPreview.view_count }} {{ t('connection.views') }}</span>
             </div>
             <div class="info-row highlight" v-if="dbPreview.fk_count !== undefined">
-              <span class="info-label">已声明外键</span>
-              <span class="info-value strong">{{ dbPreview.fk_count }} 条</span>
+              <span class="info-label">{{ t('connection.fkCount') }}</span>
+              <span class="info-value strong">{{ dbPreview.fk_count }} {{ t('connection.relations') }}</span>
             </div>
           </div>
 
           <div class="table-preview" v-if="dbPreview.tables && dbPreview.tables.length">
-            <div class="preview-label">表列表示例</div>
+            <div class="preview-label">{{ t('connection.tablePreview') }}</div>
             <div class="mini-table">
               <div class="mini-row header">
-                <span>表名</span>
-                <span>引擎</span>
-                <span>行数</span>
-                <span>大小</span>
+                <span>{{ t('connection.tableName') }}</span>
+                <span>{{ t('connection.engine') }}</span>
+                <span>{{ t('connection.rows') }}</span>
+                <span>{{ t('connection.size') }}</span>
               </div>
               <div class="mini-row" v-for="t in dbPreview.tables.slice(0, 6)" :key="t.name">
                 <span class="tbl-name">{{ t.name }}</span>
@@ -210,7 +219,7 @@
                 <span>{{ t.size || '-' }}</span>
               </div>
               <div class="mini-row more" v-if="dbPreview.table_count > 6">
-                <span>... 还有 {{ dbPreview.table_count - 6 }} 张表</span>
+                <span>{{ t('connection.moreTables', { count: dbPreview.table_count - 6 }) }}</span>
               </div>
             </div>
           </div>
@@ -219,13 +228,11 @@
         <div class="help-section">
           <div class="help-title">
             <el-icon :size="16" color="#6366F1"><QuestionFilled /></el-icon>
-            <span>需要帮助？</span>
+            <span>{{ t('connection.helpTitle') }}</span>
           </div>
-          <ul class="help-list">
-            <li>如何创建 MySQL 只读账号？</li>
-            <li>支持哪些网络环境？</li>
-            <li>连接失败常见原因排查</li>
-          </ul>
+          <div class="help-tip">
+            {{ t('connection.helpTip') }}
+          </div>
         </div>
       </div>
     </div>
@@ -236,12 +243,16 @@
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import { useProjectStore } from '@/stores/project'
 import { testConnection, saveConnection, getConnection } from '@/api/connection'
 import { syncSchema } from '@/api/schema'
 
 const route = useRoute()
 const router = useRouter()
+const { t, locale } = useI18n()
+// English labels ("Connection Timeout") need more room than Chinese ones.
+const formLabelWidth = computed(() => (locale.value === 'zh-CN' ? '110px' : '170px'))
 const projectStore = useProjectStore()
 const formRef = ref()
 const projectId = computed(() => route.params.id)
@@ -256,6 +267,8 @@ const errorMessage = ref('')
 const errorType = ref('')
 const projectName = ref('')
 const dbPreview = ref(null)
+const hasSavedConnection = ref(false)
+let projectDbType = null
 
 const form = reactive({
   db_type: 'mysql',
@@ -265,30 +278,52 @@ const form = reactive({
   username: '',
   password: '',
   ssl: false,
+  ca: '',
   timeout: 30
 })
 
+// Switch to the default port when the database type changes (only if the user
+// has not customized the port).
+watch(
+  () => form.db_type,
+  (type) => {
+    if (type === 'postgresql' && (form.port === 3306 || form.port === 5432)) {
+      form.port = 5432
+    } else if (type === 'mysql' && (form.port === 3306 || form.port === 5432)) {
+      form.port = 3306
+    }
+    // Default username per database type (only when empty or still the other
+    // type's default, never overwrite a custom value).
+    const defaultUser = type === 'postgresql' ? 'postgres' : 'root'
+    if (!form.username || form.username === 'root' || form.username === 'postgres') {
+      form.username = defaultUser
+    }
+  }
+)
+
 const rules = {
-  host: [{ required: true, message: '请输入主机地址', trigger: 'blur' }],
-  port: [{ required: true, message: '请输入端口', trigger: 'blur' }],
-  database_name: [{ required: true, message: '请输入数据库名', trigger: 'blur' }],
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+  host: [{ required: true, message: () => t('connection.formMessages.hostRequired'), trigger: 'blur' }],
+  port: [{ required: true, message: () => t('connection.formMessages.portRequired'), trigger: 'blur' }],
+  database_name: [{ required: true, message: () => t('connection.formMessages.databaseRequired'), trigger: 'blur' }],
+  username: [{ required: true, message: () => t('connection.formMessages.usernameRequired'), trigger: 'blur' }],
+  password: [{ required: true, message: () => t('connection.formMessages.passwordRequired'), trigger: 'blur' }]
 }
 
 const checkItems = reactive([
-  { name: '网络可达性', detail: '', status: 'idle', time: null },
-  { name: '账号认证', detail: '', status: 'idle', time: null },
-  { name: '数据库存在性', detail: '', status: 'idle', time: null },
-  { name: '权限检查（只读）', detail: '需要 SELECT, SHOW VIEW 权限', status: 'idle', time: null },
-  { name: 'SSL 握手（如启用）', detail: '', status: 'idle', time: null },
-  { name: 'Schema 元数据读取', detail: '读取 INFORMATION_SCHEMA', status: 'idle', time: null }
+  { name: () => t('connection.networkCheck'), detail: '', status: 'idle', time: null },
+  { name: () => t('connection.authCheck'), detail: '', status: 'idle', time: null },
+  { name: () => t('connection.dbExistsCheck'), detail: '', status: 'idle', time: null },
+  { name: () => t('connection.permissionCheck'), detail: () => t('connection.permissionCheckDesc'), status: 'idle', time: null },
+  { name: () => t('connection.sslCheck'), detail: '', status: 'idle', time: null },
+  { name: () => t('connection.schemaCheck'), detail: () => t('connection.schemaCheckDesc'), status: 'idle', time: null }
 ])
+
+const checkText = (v) => (typeof v === 'function' ? v() : v)
 
 const resetChecks = () => {
   checkItems.forEach(c => { c.status = 'idle'; c.time = null; c.detail = '' })
-  checkItems[3].detail = '需要 SELECT, SHOW VIEW 权限'
-  checkItems[5].detail = '读取 INFORMATION_SCHEMA'
+  checkItems[3].detail = () => t('connection.permissionCheckDesc')
+  checkItems[5].detail = () => t('connection.schemaCheckDesc')
   errorMessage.value = ''
   errorType.value = ''
   testPassed.value = false
@@ -327,7 +362,7 @@ const handleTestConnection = async () => {
       database_name: form.database_name,
       username: form.username,
       password: form.password || null,
-      ssl_config: { enabled: !!form.ssl },
+      ssl_config: { enabled: !!form.ssl, ca: form.ca || null },
       timeout: Number(form.timeout)
     }
     const data = await testConnection(payload)
@@ -351,16 +386,16 @@ const handleTestConnection = async () => {
         table_count: data?.table_count,
         elapsed_ms: data?.elapsed_ms
       }
-      ElMessage.success('数据库连接测试成功')
+      ElMessage.success(t('connection.testSuccess'))
     } else {
       testFailed.value = true
-      errorMessage.value = data?.message || '连接测试失败'
+      errorMessage.value = data?.message || t('connection.testFailedMsg')
       errorType.value = 'CONNECTION_ERROR'
     }
   } catch (e) {
     testFailed.value = true
     const resp = e?.response?.data
-    errorMessage.value = resp?.message || e?.message || '连接失败，请检查配置'
+    errorMessage.value = resp?.message || e?.message || t('connection.connectionFailed')
     errorType.value = resp?.error_type || resp?.code || ''
     checkItems.forEach(c => {
       if (c.status === 'running' || c.status === 'idle') c.status = 'failed'
@@ -388,15 +423,15 @@ const handleSaveAndSync = async () => {
       database_name: form.database_name,
       username: form.username,
       password: form.password || null,
-      ssl_config: { enabled: !!form.ssl },
+      ssl_config: { enabled: !!form.ssl, ca: form.ca || null },
       timeout: Number(form.timeout),
       save_credentials: true
     })
-    ElMessage.success('连接配置已保存，开始同步 Schema...')
+    ElMessage.success(t('connection.saveSuccess'))
 
     currentStep.value = 2
     const syncData = await syncSchema(projectId.value)
-    ElMessage.success('Schema 同步完成')
+    ElMessage.success(t('connection.syncSuccess'))
 
     currentStep.value = 3
     setTimeout(() => {
@@ -413,6 +448,7 @@ const loadExistingConnection = async () => {
   try {
     const data = await getConnection(projectId.value)
     if (data) {
+      hasSavedConnection.value = true
       Object.assign(form, {
         db_type: data.db_type || form.db_type,
         host: data.host || '',
@@ -421,11 +457,15 @@ const loadExistingConnection = async () => {
         username: data.username || '',
         password: data.password || '',
         ssl: data.ssl || false,
+        ca: data.ssl_config?.ca || '',
         timeout: data.timeout || 30
       })
       if (data.tested) {
         testPassed.value = true
       }
+    } else if (projectDbType) {
+      // No saved connection yet: use the db type chosen when creating the project.
+      form.db_type = projectDbType
     }
   } catch {
     // no existing connection, ignore
@@ -435,7 +475,13 @@ const loadExistingConnection = async () => {
 const loadProject = async () => {
   try {
     const data = await projectStore.fetchProject(projectId.value)
-    if (data) projectName.value = data.name
+    if (data) {
+      projectName.value = data.name
+      projectDbType = data.db_type || null
+      if (!hasSavedConnection.value && projectDbType) {
+        form.db_type = projectDbType
+      }
+    }
   } catch {
     // ignore
   }
@@ -446,7 +492,7 @@ watch(projectId, async (newId, oldId) => {
   if (!newId || newId === oldId) return
   Object.assign(form, {
     db_type: 'mysql', host: '', port: 3306, database_name: '',
-    username: '', password: '', ssl: false, timeout: 30
+    username: '', password: '', ssl: false, ca: '', timeout: 30
   })
   currentStep.value = 0
   resetChecks()
@@ -482,6 +528,7 @@ onMounted(() => {
 .work-area {
   flex: 1;
   display: flex;
+  align-items: flex-start;
   gap: 20px;
   padding: 24px 40px;
   overflow: auto;
@@ -530,12 +577,20 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+  max-width: 45%;
+  min-width: 0;
   padding: 6px 12px;
   background: rgba(59, 130, 246, 0.08);
   border-radius: 20px;
   font-size: 12px;
   color: $primary-color;
   font-weight: 500;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .security-tip {
@@ -777,29 +832,85 @@ onMounted(() => {
     margin-bottom: 12px;
   }
 
-  .help-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
+  .help-tip {
+    font-size: 12px;
+    line-height: 1.8;
+    color: #64748B;
+    background: rgba(99, 102, 241, 0.06);
+    border: 1px solid rgba(99, 102, 241, 0.18);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+}
 
-    li {
-      padding: 8px 10px;
-      font-size: 12px;
-      color: $primary-color;
-      border-radius: $radius-sm;
-      cursor: pointer;
-      transition: $transition-base;
+html.dark {
+  .connection-page {
+    background: #1e1e1e;
+  }
 
-      &:hover {
-        background: rgba(59, 130, 246, 0.06);
-      }
+  .steps-header {
+    background: #252526;
+    border-bottom-color: #3a3a3c;
+  }
 
-      &::before {
-        content: '›';
-        margin-right: 6px;
-        color: $text-placeholder;
-      }
+  .left-panel,
+  .help-section,
+  .test-result-section {
+    background: #252526 !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25), 0 4px 6px -4px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .panel-title,
+  .section-title,
+  .help-title,
+  .preview-label,
+  .info-value {
+    color: #e2e8f0;
+  }
+
+  .panel-desc,
+  .info-label,
+  .error-type,
+  .check-item .check-detail {
+    color: #94a3b8;
+  }
+
+  .project-chip {
+    background: rgba(59, 130, 246, 0.16);
+    color: #93c5fd;
+  }
+
+  .security-tip {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.05));
+    border-color: rgba(245, 158, 11, 0.3);
+
+    .tip-content {
+      color: #d1d5db;
     }
+  }
+
+  .help-tip {
+    color: #94a3b8;
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.3);
+  }
+
+  .check-item .check-name {
+    color: #d1d5db;
+  }
+
+  .mini-table {
+    border-color: #3a3a3c;
+  }
+
+  .mini-table .mini-row {
+    color: #d1d5db;
+  }
+
+  .form-actions :deep(.el-button:not(.el-button--primary)) {
+    color: #e2e8f0;
+    border-color: #3a3a3c;
+    background: #2a2a2b;
   }
 }
 </style>

@@ -9,11 +9,12 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
+from typing import Callable
 
 import httpx
 
 from app.services.crypto import decrypt
-from app.services.relation_candidate import CandidateRelation, candidate_to_dict
+from app.services.relation_candidate import CandidateRelation, _extract_hint, candidate_to_dict
 from app.services.schema_parser import ParsedSchema, is_type_compatible
 
 
@@ -69,11 +70,15 @@ class LLMSettings:
 
 def settings_from_config(config) -> LLMSettings:
     """Build LLMSettings from a LLMConfig ORM object."""
+    endpoint_path = getattr(config, "endpoint_path", None)
+    if not endpoint_path:
+        endpoint_path = "/api/chat" if config.provider == "ollama" else "/chat/completions"
     return LLMSettings(
         provider=config.provider,
         base_url=config.base_url,
         api_key=decrypt(config.api_key_encrypted) or "",
         model=config.model,
+        endpoint_path=endpoint_path,
         temperature=config.temperature,
         max_tokens=config.max_tokens,
         timeout_seconds=config.timeout_seconds,
@@ -100,12 +105,15 @@ def test_llm_connection(settings: LLMSettings) -> dict:
 
     start = time.time()
     url = _chat_url(settings.base_url, settings.endpoint_path)
-    headers = {"Authorization": f"Bearer {settings.api_key}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
+    if settings.api_key:
+        headers["Authorization"] = f"Bearer {settings.api_key}"
     payload = {
         "model": settings.model,
         "messages": [{"role": "user", "content": "ping"}],
         "max_tokens": 8,
         "temperature": 0,
+        "stream": False,
     }
     try:
         with httpx.Client(timeout=settings.timeout_seconds) as client:
@@ -172,14 +180,17 @@ def _chat_url(base_url: str, endpoint_path: str = "/chat/completions") -> str:
     ep = endpoint_path if endpoint_path.startswith("/") else f"/{endpoint_path}"
     if base.endswith(ep):
         return base
-    # Ollama and other local endpoints don't use /v1 prefix
-    if ep in ("/api/chat", "/chat/completions", "/responses"):
-        # Only add /v1 for OpenAI-compatible providers, not Ollama
+    # If the endpoint already carries a /v1 prefix, do not duplicate a trailing /v1 in base_url.
+    if ep.startswith("/v1/"):
         if base.endswith("/v1"):
-            return base + ep
-        if "/v1/" in base:
-            return base + ep
-        if base.endswith(":11434") or "ollama" in base.lower():
+            return base + ep[len("/v1"):]
+        return base + ep
+    # Legacy Ollama native endpoint: use as-is.
+    if ep == "/api/chat":
+        return base + ep
+    # OpenAI-compatible endpoints: ensure /v1 prefix when missing.
+    if ep in ("/chat/completions", "/responses"):
+        if base.endswith("/v1") or "/v1/" in base:
             return base + ep
         return base + "/v1" + ep
     return base + ep
@@ -219,10 +230,14 @@ def _summarize_schema(schema: ParsedSchema) -> list[dict]:
 # ---------------------------------------------------------------------------
 SYSTEM_PROMPT = (
     "你是一个数据库架构分析专家。你的任务是根据提供的数据库 Schema 元数据，"
-    "判断给定的候选表关系是否成立，并给出结构化的 JSON 结果。\n"
+    "判断给定的候选表关系是否成立，并基于 Schema 语义补充额外的合理关系，"
+    "最终给出结构化的 JSON 结果。\n"
     "你必须严格遵守以下规则：\n"
     "1. 只能输出给定 Schema 中真实存在的表和字段。\n"
-    "2. 只能对提供的候选关系进行判断，不要凭空创造新的关系。\n"
+    "2. 对提供的候选关系进行判断（只输出你认为成立的关系）；同时，如果发现 Schema 中"
+    "还存在未列出的合理关系（例如 xxx_id 指向另一张表的主键或唯一键，且两张表名没有"
+    "直接对应关系），也可以补充输出，但必须使用 Schema 中真实存在的表和字段，"
+    "不得凭空捏造。\n"
     "3. 输出必须是合法的 JSON 数组，每个元素包含字段：source_table, source_column, "
     "target_table, target_column, cardinality, confidence(0-1 的浮点数), reason(字符串数组), "
     "risks(字符串数组)。\n"
@@ -239,10 +254,20 @@ SYSTEM_PROMPT = (
 def _build_prompt(schema: ParsedSchema, candidates: list[CandidateRelation]) -> str:
     schema_desc = json.dumps(_summarize_schema(schema), ensure_ascii=False)
     cand_desc = json.dumps([candidate_to_dict(c) for c in candidates], ensure_ascii=False)
+    if candidates:
+        instruction = (
+            "请对每一个候选关系进行判断，只输出你认为成立的关系；"
+            "此外，如果你认为 Schema 中还存在未列出的合理关系，也可以一并补充输出。"
+        )
+    else:
+        instruction = (
+            "候选关系列表为空。请根据 Schema 语义找出你认为合理的外键式逻辑关系"
+            "（例如 xxx_id 指向另一张表的主键或唯一键），输出 JSON 数组。"
+        )
     return (
         f"数据库 Schema 元数据如下：\n{schema_desc}\n\n"
         f"以下是待判断的候选关系列表：\n{cand_desc}\n\n"
-        "请对每一个候选关系进行判断，输出 JSON 数组。"
+        f"{instruction}"
     )
 
 
@@ -261,6 +286,38 @@ class LLMRelationResult:
     risks: list[str]
     valid: bool = True
     validation_error: str | None = None
+
+
+def _is_plausible_new_proposal(item: dict, schema: ParsedSchema) -> bool:
+    """Structural gate for relations the LLM proposes outside the rule-candidate list.
+
+    A free-form proposal is only accepted when it references real tables/columns,
+    the source column is a non-PK reference-like column (e.g. xxx_id), and the
+    target column is a PK or unique key of the target table. This prevents the
+    LLM from inventing hallucinated relationships. Type compatibility is checked
+    separately by the caller.
+    """
+    s_table = (item.get("source_table") or "").lower()
+    s_col = (item.get("source_column") or "").lower()
+    t_table = (item.get("target_table") or "").lower()
+    t_col = (item.get("target_column") or "").lower()
+    if not all([s_table, s_col, t_table, t_col]):
+        return False
+    src_t = next((t for t in schema.tables if t.name.lower() == s_table), None)
+    tgt_t = next((t for t in schema.tables if t.name.lower() == t_table), None)
+    if not src_t or not tgt_t:
+        return False
+    src_c = next((c for c in src_t.columns if c.name.lower() == s_col), None)
+    tgt_c = next((c for c in tgt_t.columns if c.name.lower() == t_col), None)
+    if not src_c or not tgt_c:
+        return False
+    if src_c.is_primary_key:
+        return False
+    if _extract_hint(src_c.name) is None:
+        return False
+    if not (tgt_c.is_primary_key or tgt_c.is_unique):
+        return False
+    return True
 
 
 def _validate_result(item: dict, schema: ParsedSchema, candidate_keys: set[tuple[str, str, str, str]]) -> LLMRelationResult:
@@ -286,8 +343,8 @@ def _validate_result(item: dict, schema: ParsedSchema, candidate_keys: set[tuple
         return err("缺少必要字段")
 
     key = (s_table.lower(), s_col.lower(), t_table.lower(), t_col.lower())
-    if key not in candidate_keys:
-        return err("关系不在候选范围内，已忽略")
+    if key not in candidate_keys and not _is_plausible_new_proposal(item, schema):
+        return err("关系不在候选范围内且未通过结构校验，已忽略")
 
     # Verify tables/columns exist in schema.
     src_table_obj = next((t for t in schema.tables if t.name.lower() == s_table.lower()), None)
@@ -384,7 +441,13 @@ def _parse_json_response(text: str) -> list[dict]:
     end = cleaned.rfind("]")
     if start != -1 and end != -1 and end > start:
         cleaned = cleaned[start : end + 1]
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        snippet = text[:800].replace("\n", "\\n").replace("\r", "")
+        raise ValueError(
+            f"无法解析为 JSON ({exc}); 原始响应前 800 字符: {snippet}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -394,17 +457,23 @@ def analyze_candidates(
     schema: ParsedSchema,
     candidates: list[CandidateRelation],
     settings: LLMSettings,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> list[LLMRelationResult]:
     """Call the LLM to analyze candidate relationships and validate the output.
 
-    If there are no candidates, returns an empty list immediately.
-    """
-    if not candidates:
-        return []
+    When there are no rule candidates the LLM is still called in discovery mode
+    so semantically-obvious relations (e.g. owner_id -> user.id) can be proposed
+    and structurally validated.
 
+    ``is_cancelled`` (when provided) is checked before every attempt so a user
+    cancellation can interrupt long-running retries promptly.
+    """
     if settings.config_id is not None:
         if not check_rate_limit(settings.config_id, settings.rate_limit, settings.rate_unlimited):
             raise LLMError(f"请求频率超限（{settings.rate_limit}次/秒），请稍后重试")
+
+    if is_cancelled is not None and is_cancelled():
+        raise RuntimeError("Task cancelled by user")
 
     candidate_keys = {
         (c.source_table.lower(), c.source_column.lower(), c.target_table.lower(), c.target_column.lower())
@@ -412,7 +481,9 @@ def analyze_candidates(
     }
 
     prompt = _build_prompt(schema, candidates)
-    headers = {"Authorization": f"Bearer {settings.api_key}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
+    if settings.api_key:
+        headers["Authorization"] = f"Bearer {settings.api_key}"
     payload = {
         "model": settings.model,
         "messages": [
@@ -421,13 +492,25 @@ def analyze_candidates(
         ],
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
+        "stream": False,
     }
+    # Qwen3 reasoning models on DashScope (阿里云百炼) spend a long time in the
+    # thinking phase on large schema prompts and can blow past the configured
+    # timeout. Analysis only needs the final judgment, so disable thinking for
+    # these providers to keep each attempt well within the request timeout.
+    if "dashscope" in (settings.base_url or "").lower():
+        payload["enable_thinking"] = False
     url = _chat_url(settings.base_url, settings.endpoint_path)
 
     last_error: str | None = None
     for attempt in range(settings.max_retries + 1):
+        if is_cancelled is not None and is_cancelled():
+            raise RuntimeError("Task cancelled by user")
         try:
-            with httpx.Client(timeout=settings.timeout_seconds) as client:
+            # Analysis prompts are much larger than a connectivity ping; give the
+            # call a little headroom over the configured timeout so a slow model
+            # still gets a fair chance on its first attempt.
+            with httpx.Client(timeout=max(settings.timeout_seconds, 90)) as client:
                 resp = client.post(url, headers=headers, json=payload)
             if resp.status_code == 200:
                 data = resp.json()
@@ -436,8 +519,8 @@ def analyze_candidates(
                 )
                 try:
                     items = _parse_json_response(content)
-                except json.JSONDecodeError as exc:
-                    last_error = f"LLM 返回内容无法解析为 JSON: {exc}"
+                except ValueError as exc:
+                    last_error = str(exc)
                     continue
                 if not isinstance(items, list):
                     last_error = "LLM 返回内容不是 JSON 数组"

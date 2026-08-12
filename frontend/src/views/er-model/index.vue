@@ -1178,17 +1178,18 @@ const autoLayout = () => {
     }
   })
 
-  // Every table has exactly four anchors (one per side). Multiple edges between
-  // the same pair of tables rotate through the sides so they do not all pile up
-  // on the same anchor: the first edge takes the geometrically best side, the
-  // next one takes the next free side, etc.
+  // Every table has twelve anchors (three per side). Sides rotate per node and
+  // the anchor index cycles 0/1/2 so a table with several outgoing/incoming FKs
+  // spreads them over its twelve anchors instead of stacking them on a single
+  // geometrically-best spot.
   const SIDE_CYCLE = [
     ['right', 'left'],
     ['bottom', 'top'],
     ['left', 'right'],
     ['top', 'bottom']
   ]
-  const pairCounter = new Map()
+  const srcCounter = new Map()
+  const tgtCounter = new Map()
   const firstPass = []
   edges.value.forEach(edge => {
     const sourceNode = vueNodes.find(n => String(n.id) === String(edge.source))
@@ -1209,20 +1210,29 @@ const autoLayout = () => {
     } else {
       geo = dx > 0 ? ['right', 'left'] : ['left', 'right']
     }
-    const pairKey = `${String(edge.source)}|${String(edge.target)}`
-    const pairIdx = pairCounter.get(pairKey) ?? 0
-    pairCounter.set(pairKey, pairIdx + 1)
-    const ordered = [geo, ...SIDE_CYCLE.filter(s => s[0] !== geo[0])]
-    const [srcSide, tgtSide] = ordered[pairIdx % ordered.length]
-    firstPass.push({ edge, srcSide, tgtSide })
+    const srcIdx = srcCounter.get(String(edge.source)) ?? 0
+    const tgtIdx = tgtCounter.get(String(edge.target)) ?? 0
+    srcCounter.set(String(edge.source), srcIdx + 1)
+    tgtCounter.set(String(edge.target), tgtIdx + 1)
+    const srcOrdered = [geo[0], ...SIDE_CYCLE.map(s => s[0]).filter(s => s !== geo[0])]
+    const tgtOrdered = [geo[1], ...SIDE_CYCLE.map(s => s[1]).filter(s => s !== geo[1])]
+    const srcSide = srcOrdered[srcIdx % srcOrdered.length]
+    const tgtSide = tgtOrdered[tgtIdx % tgtOrdered.length]
+    firstPass.push({
+      edge,
+      srcSide,
+      tgtSide,
+      srcAnchor: srcIdx % 3,
+      tgtAnchor: tgtIdx % 3
+    })
   })
 
-  edges.value = firstPass.map(({ edge, srcSide, tgtSide }) => {
+  edges.value = firstPass.map(({ edge, srcSide, tgtSide, srcAnchor, tgtAnchor }) => {
     if (!srcSide || !tgtSide) return edge
     return {
       ...edge,
-      sourceHandle: `${srcSide}-source-0`,
-      targetHandle: `${tgtSide}-source-0`
+      sourceHandle: `${srcSide}-source-${srcAnchor}`,
+      targetHandle: `${tgtSide}-source-${tgtAnchor}`
     }
   })
   refreshHandleBounds()
@@ -1307,16 +1317,15 @@ const buildFromSchema = (tables, relationships) => {
 
 const normalizeList = (d) => Array.isArray(d) ? d : (d?.items || d?.relationships || d?.tables || [])
 
-// Every table has exactly four anchors (top/right/bottom/left, one per side),
-// so every edge handle is normalized to the fixed `-0` id of that side. Old
-// models with indexed ids (`right-source-1`) are folded back to `-0`.
-// Every table has exactly four anchors (top/right/bottom/left, one per side,
+// Every table has twelve anchors (top/right/bottom/left, three per side,
 // type=source). Loose connection mode lets every anchor act as both source and
-// target, so edge source/target handles both use the fixed `${side}-source-0` id.
+// target, so edge source/target handles both use a `${side}-source-{0|1|2}` id.
+// Old models saved with the four-anchor scheme still carry `-0` ids, which
+// remain valid anchors.
 const normalizeHandleId = (handleId, fallback) => {
   const m = /^(top|right|bottom|left)-(source|target)(?:-(\d+))?$/.exec(handleId || '')
   if (!m) return fallback
-  return `${m[1]}-source-0`
+  return `${m[1]}-source-${m[3] ?? 0}`
 }
 
 const normalizeEdge = (edge) => {

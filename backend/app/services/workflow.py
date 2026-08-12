@@ -13,9 +13,10 @@ Workflow topology (see ai_sql_完整版.md §7):
 The orchestration is NOT fully autonomous. Instead:
 - *Schema Parser / Normalizer / Candidate Generator* are pure-programmatic nodes
   with deterministic output.
-- *Relation Analysis Agent* is the only LLM-powered node, whose output is
-  bounded to the candidate list (the LLM cannot invent relationships outside
-  the candidate set) and is validated by a Pydantic-style schema checker.
+- *Relation Analysis Agent* is the only LLM-powered node. It judges the
+  rule-generated candidate list and may additionally propose relations the
+  rules missed (e.g. owner_id -> user.id); every output is validated against
+  the real schema by a structural checker before being accepted.
 - *Confidence Classifier* routes results to `auto_suggested` or
   `manual_review_required` buckets, but everything still passes through a
   human-confirmation step on the frontend.
@@ -33,6 +34,7 @@ from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from app.models import AnalysisTask
 from app.services.llm_service import (
     LLMError,
     LLMSettings,
@@ -153,14 +155,16 @@ def candidate_gen_node(state: WorkflowState, progress: ProgressCb | None = None)
 
 
 def relation_analysis_agent_node(
-    state: WorkflowState, progress: ProgressCb | None = None
+    state: WorkflowState,
+    progress: ProgressCb | None = None,
+    cancel_checker: Callable[[], bool] | None = None,
 ) -> WorkflowState:
     """Core LLM agent node.
 
     Calls analyze_candidates() which sends the schema + candidate list to the
-    LLM. The LLM is *not* free-form: it only marks pre-existing candidates
-    as valid / invalid and assigns confidence/reason/risks. Output is
-    structurally validated inside analyze_candidates() itself.
+    LLM. The LLM judges the rule candidates and may propose additional
+    relations the rules missed; every output is structurally validated inside
+    analyze_candidates() itself.
     """
     progress and progress("validating", 70, None)
     candidates = state.get("candidates") or []
@@ -177,7 +181,7 @@ def relation_analysis_agent_node(
         }
 
     try:
-        results = analyze_candidates(schema, candidates, settings)
+        results = analyze_candidates(schema, candidates, settings, is_cancelled=cancel_checker)
     except LLMError as exc:
         if progress:
             progress("failed", 70, str(exc))
@@ -186,6 +190,10 @@ def relation_analysis_agent_node(
             **_log(state, f"relation_analysis_agent LLMError: {exc}"),
         }
     except Exception as exc:
+        if "Task cancelled by user" in str(exc):
+            # Let the cancellation propagate so the task row stays "cancelled"
+            # instead of being marked failed by the workflow summary.
+            raise
         if progress:
             progress("failed", 70, f"LLM 调用异常: {exc}")
         return {
@@ -410,6 +418,7 @@ def _conditional_branch(state: WorkflowState) -> str:
 def build_workflow(
     db_session_factory: Callable[[], Any],
     progress: ProgressCb | None = None,
+    cancel_checker: Callable[[], bool] | None = None,
 ):
     """Construct a compiled LangGraph workflow.
 
@@ -432,7 +441,7 @@ def build_workflow(
     )
     builder.add_node(
         "llm_agent",
-        lambda state: relation_analysis_agent_node(state, progress),
+        lambda state: relation_analysis_agent_node(state, progress, cancel_checker),
     )
     builder.add_node(
         "skip_llm",
@@ -479,6 +488,7 @@ def run_analysis_workflow(
     run_llm: bool,
     existing_keys: set[tuple[str, str, str, str]],
     db_session_factory: Callable[[], Any],
+    task_id: int | None = None,
     progress: ProgressCb | None = None,
 ) -> dict:
     """Execute the full LangGraph workflow end-to-end.
@@ -486,7 +496,20 @@ def run_analysis_workflow(
     Returns a summary dict with keys { error, candidate_count, suggestion_count,
     used_llm, node_log }.
     """
-    app = build_workflow(db_session_factory, progress)
+    def cancel_checker() -> bool:
+        if task_id is None:
+            return False
+        try:
+            sdb = db_session_factory()
+            try:
+                t = sdb.get(AnalysisTask, task_id)
+                return bool(t and t.status == "cancelled")
+            finally:
+                sdb.close()
+        except Exception:
+            return False
+
+    app = build_workflow(db_session_factory, progress, cancel_checker)
     initial_state: WorkflowState = {
         "project_id": project_id,
         "snapshot_data": snapshot_data,

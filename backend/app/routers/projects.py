@@ -41,13 +41,18 @@ def _enrich(p: Project, db: Session) -> ProjectOut:
         tables=table_count,
         relations=rel_count,
         suggestions=suggestion_count,
-        db_type=connection.db_type if connection else None,
+        db_type=p.db_type or (connection.db_type if connection else None),
     )
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
-    project = Project(name=payload.name, description=payload.description, status="created")
+    project = Project(
+        name=payload.name,
+        description=payload.description,
+        db_type=payload.db_type or "mysql",
+        status="created",
+    )
     db.add(project)
     try:
         db.commit()

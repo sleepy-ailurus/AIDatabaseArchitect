@@ -179,10 +179,11 @@ export const useErModelStore = defineStore('erModel', () => {
       }
     })
 
-    // 2) Every table has exactly four anchors (one per side). Multiple edges
-    //    between the same pair of tables rotate through the sides so they do
-    //    not all pile up on the same anchor: the first edge takes the
-    //    geometrically best side, the next one takes the next free side, etc.
+    // 2) Every table has twelve anchors (three per side). Multiple edges
+    //    between the same pair of tables rotate through the sides and the
+    //    0/1/2 anchor slots so they do not all pile up on the same spot: the
+    //    first edge takes the geometrically best side/slot, the next one takes
+    //    the next free side/slot, etc.
     const chooseGeo = (srcNode, tgtNode) => {
       if (!srcNode || !tgtNode) return ['right', 'left']
       const sx = srcNode.position?.x ?? 0
@@ -203,34 +204,44 @@ export const useErModelStore = defineStore('erModel', () => {
       ['left', 'right'],
       ['top', 'bottom']
     ]
-    const pairCounter = new Map()
+    // Rotate sides per NODE (not per table pair) so a table with several
+    // outgoing/incoming FKs spreads them over its twelve anchors instead of
+    // stacking every line on the single geometrically-best side.
+    const srcCounter = new Map()
+    const tgtCounter = new Map()
     const edgeAssignments = []
     for (const item of normalized) {
       const srcNode = resolveNode(item.src)
       const tgtNode = resolveNode(item.tgt)
       const geo = chooseGeo(srcNode, tgtNode)
-      const pairKey = `${String(item.src)}|${String(item.tgt)}`
-      const pairIdx = pairCounter.get(pairKey) ?? 0
-      pairCounter.set(pairKey, pairIdx + 1)
-      const ordered = [geo, ...SIDE_CYCLE.filter(s => s[0] !== geo[0])]
-      const [srcSide, tgtSide] = ordered[pairIdx % ordered.length]
       const srcId = resolveNodeId(item.src)
       const tgtId = resolveNodeId(item.tgt)
+      const srcIdx = srcCounter.get(String(srcId)) ?? 0
+      const tgtIdx = tgtCounter.get(String(tgtId)) ?? 0
+      srcCounter.set(String(srcId), srcIdx + 1)
+      tgtCounter.set(String(tgtId), tgtIdx + 1)
+      // Prefer the geometric side for the first line of a node, then rotate.
+      const srcOrdered = [geo[0], ...SIDE_CYCLE.map(s => s[0]).filter(s => s !== geo[0])]
+      const tgtOrdered = [geo[1], ...SIDE_CYCLE.map(s => s[1]).filter(s => s !== geo[1])]
+      const srcSide = srcOrdered[srcIdx % srcOrdered.length]
+      const tgtSide = tgtOrdered[tgtIdx % tgtOrdered.length]
       edgeAssignments.push({
         ...item,
-        srcId, tgtId, srcSide, tgtSide
+        srcId, tgtId, srcSide, tgtSide,
+        srcAnchor: srcIdx % 3,
+        tgtAnchor: tgtIdx % 3
       })
     }
 
-    // 3) Build final edges. Anchor ids are fixed (-0): one anchor per side.
+    // 3) Build final edges. Anchor ids are fixed slots (-0/-1/-2): three per side.
     return edgeAssignments.map((a) => {
       const r = a.rawRel
       return {
         id: String(r.id ?? `e${a.idx}`),
         source: a.srcId,
         target: a.tgtId,
-        sourceHandle: `${a.srcSide}-source-0`,
-        targetHandle: `${a.tgtSide}-source-0`,
+        sourceHandle: `${a.srcSide}-source-${a.srcAnchor}`,
+        targetHandle: `${a.tgtSide}-source-${a.tgtAnchor}`,
         type: 'relationEdge',
         data: {
           cardinality: a.card,

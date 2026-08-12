@@ -93,6 +93,29 @@ def _table_name_matches_hint(table_name: str, hint: str) -> bool:
     return False
 
 
+def _is_strong_table_match(table_name: str, hint: str) -> bool:
+    """Return True when the hint matches the table name exactly or through a
+    simple singular/plural inflection.
+
+    Strong matches are reliable enough to accept the canonical FK pattern
+    ``child.xxx_id -> parent.id`` (target column is the plain ``id`` primary
+    key). Fuzzy matches (prefix / substring / abbreviation) still require the
+    target column to echo the hint so we do not pair ``user_id`` with a table
+    that merely starts with "user" (e.g. ``user_friend``).
+    """
+    tn = table_name.lower()
+    h = hint.lower()
+    if tn == h or _singularize(tn) == h or _singularize(h) == tn:
+        return True
+    if tn == h + "s" or tn == h + "es":
+        return True
+    if tn.replace("_", "") == h.replace("_", "") + "s":
+        return True
+    if _singularize(tn).replace("_", "") == h.replace("_", ""):
+        return True
+    return False
+
+
 def _is_subsequence(short: str, long: str) -> bool:
     """Return True if every character of `short` appears in `long` in order."""
     idx = 0
@@ -170,6 +193,7 @@ def generate_candidates(schema: ParsedSchema) -> list[CandidateRelation]:
                     continue
                 if not _table_name_matches_hint(tgt_table.name, hint):
                     continue
+                strong_match = _is_strong_table_match(tgt_table.name, hint)
 
                 # Prefer PK target, fall back to unique columns named id/code.
                 target_cols: list[tuple[str, str, bool]] = []
@@ -185,7 +209,10 @@ def generate_candidates(schema: ParsedSchema) -> list[CandidateRelation]:
                     # abbreviation), skip target columns whose names do not
                     # contain the hint. This prevents "tea_id -> tc_id" on a
                     # table that merely happens to contain the letters "tea".
-                    if not _target_column_matches_hint(tcol_name, hint):
+                    # For exact / inflected table matches, the canonical
+                    # "xxx_id -> parent.id" pattern is always valid, so a plain
+                    # `id` PK target is accepted without the column guard.
+                    if not strong_match and not _target_column_matches_hint(tcol_name, hint):
                         continue
 
                     key = (

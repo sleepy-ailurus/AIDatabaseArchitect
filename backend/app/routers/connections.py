@@ -31,9 +31,11 @@ def _to_out(conn: DatabaseConnection) -> ConnectionOut:
 
 @router.post("/database-connections/test", response_model=ConnectionTestResult)
 def test_db_connection(payload: ConnectionTest):
-    """Test a MySQL connection without persisting it."""
+    """Test a MySQL/PostgreSQL connection without persisting it."""
     ssl_enabled = bool(payload.ssl_config and payload.ssl_config.enabled)
+    ca = payload.ssl_config.ca if payload.ssl_config else None
     result = parse_test_connection(
+        db_type=str(payload.db_type),
         host=str(payload.host),
         port=int(payload.port),
         database=str(payload.database_name),
@@ -41,6 +43,7 @@ def test_db_connection(payload: ConnectionTest):
         password=payload.password,
         ssl=ssl_enabled,
         timeout=int(payload.timeout),
+        ca=ca,
     )
     return ConnectionTestResult(**result)
 

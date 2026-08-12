@@ -29,12 +29,14 @@ class ErrorOut(BaseModel):
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
+    db_type: str = "mysql"
 
 
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     status: str | None = None
+    db_type: str | None = None
 
 
 class ProjectOut(ORMModel):
@@ -241,6 +243,7 @@ class LLMConfigCreate(BaseModel):
     base_url: str = Field(min_length=1)
     api_key: str | None = None
     model: str = Field(min_length=1)
+    endpoint_path: str = "/chat/completions"
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_tokens: int = Field(default=4096, ge=1)
     timeout_seconds: int = Field(default=60, ge=1, le=600)
@@ -259,6 +262,7 @@ class LLMConfigUpdate(BaseModel):
     base_url: str | None = None
     api_key: str | None = None
     model: str | None = None
+    endpoint_path: str | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1)
     timeout_seconds: int | None = Field(default=None, ge=1, le=600)
@@ -277,6 +281,7 @@ class LLMConfigOut(ORMModel):
     provider: str
     base_url: str
     model: str
+    endpoint_path: str = "/chat/completions"
     temperature: float
     max_tokens: int
     timeout_seconds: int

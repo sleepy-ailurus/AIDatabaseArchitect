@@ -4,6 +4,16 @@
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
   >
+    <!-- Invisible wide hit area so the thin line is easy to hover/click. -->
+    <path
+      :d="path"
+      fill="none"
+      stroke="transparent"
+      :stroke-width="hitStrokeWidth"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      style="pointer-events: stroke; cursor: pointer;"
+    />
     <path
       v-if="isDark"
       :d="path"
@@ -108,7 +118,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { EdgeText, getSmoothStepPath } from '@vue-flow/core'
+import { EdgeText, getSmoothStepPath, useVueFlow } from '@vue-flow/core'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -121,6 +131,14 @@ const props = defineProps({
   data: { type: Object, default: () => ({}) },
   markerEnd: { type: String, default: '' },
   selected: { type: Boolean, default: false }
+})
+
+const { viewport } = useVueFlow()
+// Keep the invisible click/hover hit area a constant ~26px on screen, no matter
+// the current zoom level (SVG stroke widths are in flow units).
+const hitStrokeWidth = computed(() => {
+  const zoom = viewport.value?.zoom || 1
+  return Math.max(26 / zoom, 26)
 })
 
 const emit = defineEmits(['delete'])
@@ -278,6 +296,11 @@ export default {
 </script>
 
 <style lang="scss">
+.relation-edge-group {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .edge-delete-btn {
   position: absolute;
   transform: translate(-50%, -50%);

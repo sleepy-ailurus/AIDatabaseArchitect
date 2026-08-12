@@ -81,7 +81,8 @@ class ParsedSchema:
 # ---------------------------------------------------------------------------
 # Connection string builder
 # ---------------------------------------------------------------------------
-def build_mysql_url(
+def build_db_url(
+    db_type: str,
     host: str,
     port: int | str,
     database: str,
@@ -89,17 +90,53 @@ def build_mysql_url(
     password: str | None,
     ssl: bool = False,
     timeout: int = 30,
-) -> str:
+    ca: str | None = None,
+) -> tuple[str, dict[str, Any], str | None]:
+    """Build a SQLAlchemy URL + connect_args for mysql or postgresql.
+
+    Returns (url, connect_args, ca_file). When `ca` (PEM content) is provided
+    the caller is responsible for removing ca_file once the connection is done.
+    """
     pwd = password or ""
     from urllib.parse import quote_plus
 
     encoded_pwd = quote_plus(pwd)
     port_int = int(port)
-    url = f"mysql+pymysql://{username}:{encoded_pwd}@{host}:{port_int}/{database}?charset=utf8mb4"
-    connect_args: dict[str, Any] = {"connect_timeout": min(timeout, 30)}
-    if ssl:
-        connect_args["ssl"] = {}
-    return url, connect_args
+    ca_file: str | None = None
+    try:
+        if ssl and ca:
+            import os
+            import tempfile
+
+            fd, ca_file = tempfile.mkstemp(suffix=".pem", prefix="db-ca-")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(ca)
+
+        if str(db_type).lower() == "postgresql":
+            url = f"postgresql+psycopg2://{username}:{encoded_pwd}@{host}:{port_int}/{database}"
+            connect_args: dict[str, Any] = {"connect_timeout": min(timeout, 30)}
+            if ssl:
+                if ca_file:
+                    connect_args["sslmode"] = "verify-ca"
+                    connect_args["sslrootcert"] = ca_file
+                else:
+                    connect_args["sslmode"] = "require"
+            return url, connect_args, ca_file
+
+        url = f"mysql+pymysql://{username}:{encoded_pwd}@{host}:{port_int}/{database}?charset=utf8mb4"
+        connect_args = {"connect_timeout": min(timeout, 30)}
+        if ssl:
+            connect_args["ssl"] = {"ca": ca_file} if ca_file else {}
+        return url, connect_args, ca_file
+    except Exception:
+        if ca_file:
+            try:
+                import os
+
+                os.unlink(ca_file)
+            except Exception:
+                pass
+        raise
 
 
 def _classify_operational_error(exc: Exception) -> str:
@@ -107,15 +144,33 @@ def _classify_operational_error(exc: Exception) -> str:
     msg = str(exc).lower()
     if "timed out" in msg or "timeout" in msg or "can't connect" in msg:
         return "network_unreachable"
-    if "access denied" in msg or "authentication" in msg or "password" in msg:
+    if (
+        "access denied" in msg
+        or "authentication" in msg
+        or "password authentication failed" in msg
+        or "password" in msg
+        or "28p01" in msg  # postgres invalid_password
+    ):
         return "auth_failed"
-    if "unknown database" in msg or "1049" in msg:
+    if (
+        "unknown database" in msg
+        or "1049" in msg
+        or "does not exist" in msg
+        or "3d000" in msg  # postgres invalid_catalog_name
+    ):
         return "database_not_found"
     if "ssl" in msg:
         return "ssl_error"
     if "permission" in msg or "denied" in msg or "access" in msg:
         return "permission_denied"
-    if "invalid literal" in msg or "nodename nor servname" in msg or "getaddrinfo" in msg or "connection refused" in msg:
+    if (
+        "invalid literal" in msg
+        or "nodename nor servname" in msg
+        or "getaddrinfo" in msg
+        or "could not translate host name" in msg
+        or "could not connect" in msg
+        or "connection refused" in msg
+    ):
         return "network_unreachable"
     return "connection_error"
 
@@ -131,8 +186,10 @@ def test_connection(
     password: str | None,
     ssl: bool = False,
     timeout: int = 30,
+    ca: str | None = None,
+    db_type: str = "mysql",
 ) -> dict:
-    """Test a MySQL connection and return diagnostics.
+    """Test a MySQL/PostgreSQL connection and return diagnostics.
 
     Returns a dict with: success, message, db_version, table_count, elapsed_ms,
     checks (list of {name, status, detail, time}).
@@ -147,7 +204,7 @@ def test_connection(
     ]
 
     start = time.time()
-    url, connect_args = build_mysql_url(host, port, database, username, password, ssl, timeout)
+    url, connect_args, ca_file = build_db_url(db_type, host, port, database, username, password, ssl, timeout, ca)
 
     try:
         engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
@@ -241,6 +298,19 @@ def test_connection(
             except Exception:
                 pass
         engine.dispose()
+        _cleanup_ca_file(ca_file)
+
+
+def _cleanup_ca_file(ca_file: str | None) -> None:
+    """Idempotently remove the temporary CA certificate file."""
+    if not ca_file:
+        return
+    try:
+        import os
+
+        os.unlink(ca_file)
+    except Exception:
+        pass
 
 
 def _ms(start: float) -> int:
@@ -249,7 +319,7 @@ def _ms(start: float) -> int:
 
 def _friendly(reason: str, raw: str) -> str:
     mapping = {
-        "network_unreachable": "网络不可达：无法连接到数据库主机，请检查地址、端口和网络是否正确，MySQL 服务是否已启动",
+        "network_unreachable": "网络不可达：无法连接到数据库主机，请检查地址、端口和网络是否正确，数据库服务是否已启动",
         "auth_failed": "认证失败：用户名或密码错误",
         "database_not_found": "数据库不存在：请确认数据库名称",
         "ssl_error": "SSL 配置错误：无法建立加密连接",
@@ -267,9 +337,11 @@ def parse_schema(
     password: str | None,
     ssl: bool = False,
     timeout: int = 30,
+    ca: str | None = None,
+    db_type: str = "mysql",
 ) -> ParsedSchema:
-    """Connect to MySQL and reflect the full schema as a ParsedSchema."""
-    url, connect_args = build_mysql_url(host, port, database, username, password, ssl, timeout)
+    """Connect to MySQL/PostgreSQL and reflect the full schema as a ParsedSchema."""
+    url, connect_args, ca_file = build_db_url(db_type, host, port, database, username, password, ssl, timeout, ca)
     try:
         engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
     except Exception as exc:
@@ -287,11 +359,16 @@ def parse_schema(
             for table_name in inspector.get_table_names():
                 ptable = ParsedTable(name=table_name)
 
-                # Table comment + engine (MySQL specific via dialect options).
+                # Table comment (+ engine for MySQL; PostgreSQL has no engine).
                 try:
-                    table_options = inspector.get_table_options(table_name) or {}
-                    ptable.engine = table_options.get("mysql_engine")
-                    ptable.comment = table_options.get("mysql_comment")
+                    if str(db_type).lower() == "postgresql":
+                        comment = inspector.get_table_comment(table_name) or {}
+                        ptable.comment = comment.get("text")
+                        ptable.engine = None
+                    else:
+                        table_options = inspector.get_table_options(table_name) or {}
+                        ptable.engine = table_options.get("mysql_engine")
+                        ptable.comment = table_options.get("mysql_comment")
                 except Exception:
                     pass
 
@@ -361,6 +438,7 @@ def parse_schema(
         raise SchemaParseError("connection_error", f"读取 Schema 失败: {exc}") from exc
     finally:
         engine.dispose()
+        _cleanup_ca_file(ca_file)
 
 
 def _stringify_default(value: Any) -> str | None:
@@ -414,7 +492,10 @@ def schema_from_dict(data: dict) -> ParsedSchema:
 
 
 def is_type_compatible(a: str, b: str) -> bool:
-    """Heuristic type compatibility check for candidate relation generation."""
+    """Heuristic type compatibility check for candidate relation generation.
+
+    Covers both MySQL and PostgreSQL type families (serial/uuid/timestamp/jsonb...).
+    """
     a = (a or "").upper()
     b = (b or "").upper()
     if not a or not b:
@@ -422,17 +503,49 @@ def is_type_compatible(a: str, b: str) -> bool:
     if a == b:
         return True
 
-    # Numeric families.
-    int_types = {"INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "MEDIUMINT"}
+    # Integer families (MySQL + PostgreSQL).
+    int_types = {
+        "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "MEDIUMINT",
+        "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8", "OID",
+    }
     if a in int_types and b in int_types:
         return True
-    if a in int_types and b in {"DECIMAL", "NUMERIC", "FLOAT", "DOUBLE"}:
+    if a in int_types and b in {"DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL", "DOUBLE PRECISION", "MONEY"}:
         return True
-    if b in int_types and a in {"DECIMAL", "NUMERIC", "FLOAT", "DOUBLE"}:
+    if b in int_types and a in {"DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL", "DOUBLE PRECISION", "MONEY"}:
         return True
 
-    string_types = {"VARCHAR", "CHAR", "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT"}
+    # Decimal / float families.
+    if a in {"DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL", "DOUBLE PRECISION", "MONEY"} and b in {
+        "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL", "DOUBLE PRECISION", "MONEY"
+    }:
+        return True
+
+    # String families.
+    string_types = {
+        "VARCHAR", "CHAR", "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT",
+        "CHARACTER VARYING", "CHARACTER", "BPCHAR", "NAME", "CITEXT",
+    }
     if a in string_types and b in string_types:
+        return True
+
+    # Temporal families.
+    time_types = {
+        "TIMESTAMP", "TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE",
+        "TIMESTAMP WITHOUT TIME ZONE", "DATETIME", "DATE", "TIME",
+        "TIME WITH TIME ZONE", "TIME WITHOUT TIME ZONE",
+    }
+    if a in time_types and b in time_types:
+        return True
+
+    # Boolean / JSON / binary families.
+    if a in {"BOOLEAN", "BOOL"} and b in {"BOOLEAN", "BOOL"}:
+        return True
+    if a in {"JSON", "JSONB"} and b in {"JSON", "JSONB"}:
+        return True
+    if a == "UUID" and b == "UUID":
+        return True
+    if a in {"BYTEA", "BLOB", "BINARY", "VARBINARY"} and b in {"BYTEA", "BLOB", "BINARY", "VARBINARY"}:
         return True
 
     # Fall back to base-type prefix match (e.g. VARCHAR vs VARCHAR).

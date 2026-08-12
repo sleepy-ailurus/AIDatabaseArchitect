@@ -108,7 +108,7 @@
           </template>
           <el-select v-model="createForm.db_type" style="width: 100%;" :placeholder="t('project.form.selectDbType')">
             <el-option label="MySQL 8.x" value="mysql" />
-            <el-option label="PostgreSQL 14+" value="postgresql" disabled />
+            <el-option label="PostgreSQL 14+" value="postgresql" />
           </el-select>
         </el-form-item>
       </el-form>

@@ -31,6 +31,12 @@ _PROVIDER_DEFAULTS = {
 }
 
 
+def _default_endpoint(provider: str, endpoint_path: str | None = None) -> str:
+    if endpoint_path:
+        return endpoint_path
+    return "/v1/chat/completions" if provider == "ollama" else "/chat/completions"
+
+
 def _to_out(cfg: LLMConfig) -> LLMConfigOut:
     api_key_plain = crypto.decrypt(cfg.api_key_encrypted)
     return LLMConfigOut(
@@ -39,6 +45,7 @@ def _to_out(cfg: LLMConfig) -> LLMConfigOut:
         provider=cfg.provider,
         base_url=cfg.base_url,
         model=cfg.model,
+        endpoint_path=_default_endpoint(cfg.provider, cfg.endpoint_path),
         temperature=cfg.temperature,
         max_tokens=cfg.max_tokens,
         timeout_seconds=cfg.timeout_seconds,
@@ -79,12 +86,14 @@ def get_config(config_id: int, db: Session = Depends(get_db)):
 @router.post("/llm-configs", response_model=LLMConfigOut, status_code=status.HTTP_201_CREATED)
 def create_config(payload: LLMConfigCreate, db: Session = Depends(get_db)):
     base_url = payload.base_url or _PROVIDER_DEFAULTS.get(payload.provider, "")
+    endpoint_path = _default_endpoint(payload.provider, payload.endpoint_path)
     cfg = LLMConfig(
         name=payload.name,
         provider=payload.provider,
         base_url=base_url,
         api_key_encrypted=crypto.encrypt(payload.api_key) if payload.api_key else None,
         model=payload.model,
+        endpoint_path=endpoint_path,
         temperature=payload.temperature,
         max_tokens=payload.max_tokens,
         timeout_seconds=payload.timeout_seconds,
@@ -150,8 +159,8 @@ def test_config(payload: LLMTestRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="配置不存在")
         settings = settings_from_config(cfg)
     else:
-        if not (payload.base_url and payload.api_key and payload.model):
-            raise HTTPException(status_code=400, detail="测试连接需要 provider/base_url/api_key/model")
+        if not (payload.base_url and payload.model):
+            raise HTTPException(status_code=400, detail="测试连接需要 base_url 和 model")
         settings = LLMSettings(
             provider=payload.provider or "openai",
             base_url=payload.base_url,

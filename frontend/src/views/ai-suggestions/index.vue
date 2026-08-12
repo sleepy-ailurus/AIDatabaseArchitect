@@ -476,7 +476,10 @@ const runAnalysis = async () => {
     // Poll task status
     const completedTask = await new Promise((resolve, reject) => {
       const startTs = Date.now()
-      const MAX_WAIT = 180_000 // 3 minutes timeout
+      // Keep the client-side cap above the backend worst case (LLM timeout x
+      // retries) so the real terminal status/error from the server surfaces
+      // instead of a generic client timeout.
+      const MAX_WAIT = 300_000 // 5 minutes
 
       pollTimer = setInterval(async () => {
         try {
@@ -1286,5 +1289,199 @@ onMounted(async () => {
 /* Override coverage-banner to avoid conflicts */
 .coverage-banner {
   margin-bottom: 16px;
+}
+</style>
+
+<style lang="scss">
+html.dark {
+  .ai-suggestions-page {
+    background: #252526;
+  }
+
+  .page-toolbar {
+    background: #252526;
+    border-bottom-color: #3c3c3c;
+
+    .toolbar-title {
+      color: #f8fafc;
+    }
+
+    .toolbar-sub {
+      color: #94a3b8;
+    }
+  }
+
+  .sum-card {
+    .sum-label {
+      color: #94a3b8;
+    }
+
+    &.high {
+      background: rgba(16, 185, 129, 0.12);
+      .sum-num { color: #34d399; }
+    }
+    &.medium {
+      background: rgba(245, 158, 11, 0.12);
+      .sum-num { color: #fbbf24; }
+    }
+    &.low {
+      background: rgba(239, 68, 68, 0.12);
+      .sum-num { color: #f87171; }
+    }
+    &.handled {
+      background: rgba(59, 130, 246, 0.12);
+      .sum-num { color: #60a5fa; }
+    }
+  }
+
+  .filter-bar {
+    background: #252526;
+    border-bottom-color: #3c3c3c;
+  }
+
+  .suggestion-card {
+    background: #252526;
+    border-color: #3c3c3c;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+
+    &.confirmed {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.08), rgba(37, 37, 38, 0.6));
+    }
+    &.rejected {
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.06), rgba(37, 37, 38, 0.6));
+    }
+  }
+
+  .table-block {
+    background: #2a2a2b;
+
+    &.target {
+      background: rgba(16, 185, 129, 0.12);
+    }
+  }
+
+  .tbl-name {
+    color: #f8fafc;
+  }
+
+  .col-name {
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .rel-type-badge {
+    color: #60a5fa;
+  }
+
+  .line {
+    background: linear-gradient(90deg, #475569, #3b82f6, #475569);
+  }
+
+  .arrow-line .el-icon {
+    color: #94a3b8 !important;
+  }
+
+  .confidence-ring .conf-value {
+    color: #f8fafc;
+  }
+  .confidence-ring.level-high .conf-value { color: #34d399; }
+  .confidence-ring.level-medium .conf-value { color: #fbbf24; }
+  .confidence-ring.level-low .conf-value { color: #f87171; }
+
+  .confidence-placeholder {
+    background: #2a2a2b;
+    border-color: #3c3c3c;
+  }
+
+  .reasons-box {
+    background: linear-gradient(135deg, #2a2a2b, #252526);
+    border-color: #3c3c3c;
+  }
+
+  .reasons-title {
+    color: #94a3b8;
+  }
+
+  .reason-chip {
+    background: #252526;
+    border-color: #3c3c3c;
+    color: #cbd5e1;
+  }
+
+  .type-check {
+    color: #94a3b8;
+    border-top-color: #3c3c3c;
+
+    code {
+      background: #2a2a2b;
+      border-color: #3c3c3c;
+      color: #a5b4fc;
+    }
+  }
+
+  .card-progress {
+    border-top-color: #3c3c3c;
+  }
+
+  .existing-fk-header .section-title {
+    color: #e2e8f0;
+  }
+
+  .existing-fk-card {
+    background: #252526;
+    border-color: #3c3c3c;
+
+    &:hover {
+      border-color: #4a4a4a;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  .suggestion-card .table-block.source .tbl-icon,
+  .existing-fk-card .table-block.target .tbl-icon {
+    background: rgba(59, 130, 246, 0.18) !important;
+  }
+  .suggestion-card .table-block.source .tbl-icon .el-icon,
+  .existing-fk-card .table-block.target .tbl-icon .el-icon {
+    color: #93c5fd !important;
+  }
+  .suggestion-card .table-block.target .tbl-icon {
+    background: rgba(16, 185, 129, 0.18) !important;
+  }
+  .suggestion-card .table-block.target .tbl-icon .el-icon {
+    color: #6ee7b7 !important;
+  }
+  .existing-fk-card .table-block.source .tbl-icon {
+    background: rgba(245, 158, 11, 0.18) !important;
+  }
+  .existing-fk-card .table-block.source .tbl-icon .el-icon {
+    color: #fcd34d !important;
+  }
+
+  .loading-overlay {
+    background: rgba(15, 23, 42, 0.8);
+  }
+
+  .loading-box {
+    background: #252526;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  }
+
+  .loading-close-btn:hover {
+    background: #3c3c3c;
+  }
+
+  .loading-spinner {
+    border-color: #3c3c3c;
+    border-top-color: #3b82f6;
+  }
+
+  .loading-text {
+    color: #f8fafc;
+  }
+
+  .batch-bar .batch-info span {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
 }
 </style>

@@ -55,10 +55,13 @@ def sync_schema(project_id: int, db: Session = Depends(get_db)):
     conn = _get_connection(db, project_id)
 
     password = crypto.decrypt(conn.password_encrypted)
-    ssl_enabled = bool(conn.ssl_config and conn.ssl_config.get("enabled"))
+    ssl_config = conn.ssl_config or {}
+    ssl_enabled = bool(ssl_config.get("enabled"))
+    ca = ssl_config.get("ca")
 
     try:
         schema = parse_schema(
+            db_type=str(conn.db_type),
             host=conn.host,
             port=conn.port,
             database=conn.database_name,
@@ -66,6 +69,7 @@ def sync_schema(project_id: int, db: Session = Depends(get_db)):
             password=password,
             ssl=ssl_enabled,
             timeout=conn.timeout,
+            ca=ca,
         )
     except SchemaParseError as exc:
         raise HTTPException(status_code=400, detail=exc.detail or exc.reason) from exc

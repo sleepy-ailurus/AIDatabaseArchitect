@@ -30,6 +30,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="created")
+    db_type: Mapped[str] = mapped_column(String(32), nullable=False, default="mysql")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
@@ -193,6 +194,7 @@ class LLMConfig(Base):
     base_url: Mapped[str] = mapped_column(String(512), nullable=False)
     api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
+    endpoint_path: Mapped[str] = mapped_column(String(255), nullable=False, default="/chat/completions")
     temperature: Mapped[float] = mapped_column(Float, nullable=False, default=0.2)
     max_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
