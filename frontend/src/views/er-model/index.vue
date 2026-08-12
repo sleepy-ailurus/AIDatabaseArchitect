@@ -29,7 +29,7 @@
             :placeholder="t('erModel.searchTablePlaceholder')"
             size="small"
             clearable
-            style="width: 160px;"
+            class="search-input"
             @keyup.enter="onSearchEnter"
           >
             <template #prefix><el-icon :size="14"><Search /></el-icon></template>
@@ -52,18 +52,26 @@
 
         <el-divider direction="vertical" />
 
-        <el-button size="small" :icon="MagicStick" type="primary" plain @click="goToSuggestions">
-          {{ t('erModel.aiSuggest') }}
-        </el-button>
-        <el-button size="small" :icon="Download" @click="goToExport">
-          {{ t('erModel.export') }}
-        </el-button>
-        <el-button size="small" :icon="Document" type="success" :loading="erModelStore.saving" @click="handleSave">
-          {{ t('erModel.save') }}
-        </el-button>
-        <el-button size="small" :icon="Promotion" @click="handleSaveVersion">
-          {{ t('erModel.saveVersion') }}
-        </el-button>
+        <el-tooltip :content="t('erModel.aiSuggest')" placement="bottom" popper-class="er-tip">
+          <el-button size="small" :icon="MagicStick" type="primary" plain @click="goToSuggestions">
+            <span class="btn-text">{{ t('erModel.aiSuggest') }}</span>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip :content="t('erModel.export')" placement="bottom" popper-class="er-tip">
+          <el-button size="small" :icon="Download" @click="goToExport">
+            <span class="btn-text">{{ t('erModel.export') }}</span>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip :content="t('erModel.save')" placement="bottom" popper-class="er-tip">
+          <el-button size="small" :icon="Document" type="success" :loading="erModelStore.saving" @click="handleSave">
+            <span class="btn-text">{{ t('erModel.save') }}</span>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip :content="t('erModel.saveVersion')" placement="bottom" popper-class="er-tip">
+          <el-button size="small" :icon="Promotion" @click="handleSaveVersion">
+            <span class="btn-text">{{ t('erModel.saveVersion') }}</span>
+          </el-button>
+        </el-tooltip>
       </div>
     </div>
 
@@ -1543,18 +1551,22 @@ onBeforeUnmount(() => {
 }
 
 .editor-header {
-  height: 64px;
+  min-height: 64px;
+  height: auto;
   background: $bg-white;
   border-bottom: 1px solid $border-light;
-  padding: 0 20px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 10px 20px;
   overflow: hidden;
-  transition: height 0.25s ease, padding 0.25s ease, opacity 0.25s ease, border-width 0.25s ease;
+  transition: min-height 0.25s ease, padding 0.25s ease, opacity 0.25s ease, border-width 0.25s ease;
 
   &.collapsed {
+    min-height: 0;
     height: 0;
     padding: 0 20px;
     opacity: 0;
@@ -1595,6 +1607,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 20px;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  min-width: 0;
 }
 
 .breadcrumb-sm {
@@ -1634,8 +1649,72 @@ onBeforeUnmount(() => {
 .header-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   margin-right: 32px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+  min-width: 0;
+}
+
+.search-input {
+  width: 160px;
+  min-width: 120px;
+  transition: width 0.2s ease;
+}
+
+.btn-text {
+  display: inline;
+  margin-left: 4px;
+}
+
+// Responsive: hide button labels and tighten spacing on narrow windows
+@media (max-width: 1200px) {
+  .editor-header {
+    gap: 10px 16px;
+  }
+
+  .header-left {
+    gap: 12px;
+  }
+
+  .header-right {
+    gap: 6px;
+    margin-right: 28px;
+  }
+
+  .search-input {
+    width: 140px;
+    min-width: 110px;
+  }
+
+  .btn-text {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .editor-header {
+    padding: 8px 16px;
+    gap: 8px 12px;
+  }
+
+  .header-left {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: flex-start;
+    margin-right: 24px;
+  }
+
+  .search-input {
+    width: 120px;
+    flex: 1;
+    max-width: 200px;
+  }
 }
 
 .editor-body {

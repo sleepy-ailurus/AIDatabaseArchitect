@@ -2,11 +2,25 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _default_database_url() -> str:
+    """Default SQLite location.
+
+    When running as a packaged executable the program directory is read-only,
+    so we fall back to a writable user-data directory under %APPDATA%.
+    """
+    if getattr(sys, "frozen", False):
+        data_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "AIDatabaseArchitect"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return f"sqlite:///{data_dir / 'app.db'}"
+    return f"sqlite:///{BASE_DIR / 'app.db'}"
 
 
 class Settings(BaseSettings):
@@ -16,8 +30,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Platform SQLite database (stored next to the backend package).
-    database_url: str = f"sqlite:///{BASE_DIR / 'app.db'}"
+    # Platform SQLite database (writable user-data dir when packaged).
+    database_url: str = _default_database_url()
 
     # Secret key used to derive the Fernet key for credential encryption.
     # In production this should be provided via the environment.
