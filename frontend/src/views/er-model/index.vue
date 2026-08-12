@@ -4,7 +4,7 @@
       <div class="header-left">
         <el-breadcrumb separator="/" class="breadcrumb-sm">
           <el-breadcrumb-item style="color: #94A3B8;">{{ t('erModel.breadcrumb.project') }}</el-breadcrumb-item>
-          <el-breadcrumb-item style="color: #94A3B8; cursor: pointer;" @click="goToProject">{{ tData('projectNames', projectName) }}</el-breadcrumb-item>
+          <el-breadcrumb-item style="color: #94A3B8; cursor: pointer;" @click="goToProject">{{ projectName }}</el-breadcrumb-item>
           <el-breadcrumb-item>
             <span class="current-crumb">{{ t('erModel.breadcrumb.erEditor') }}</span>
           </el-breadcrumb-item>

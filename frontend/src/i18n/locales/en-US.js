@@ -7,19 +7,6 @@ export default {
   },
   // Dynamic data translations - map backend Chinese values to i18n keys
   data: {
-    // Project name translations (key is Chinese name from backend)
-    projectNames: {
-      '学生管理系统': 'Student Management System',
-      '访腾讯会议': 'Tencent Meeting',
-      '电商平台': 'E-commerce Platform',
-      '订单系统': 'Order Management System',
-      '支付系统': 'Payment System',
-      '用户中心': 'User Center',
-      '商品管理': 'Product Management',
-      '库存管理': 'Inventory Management',
-      '日志系统': 'Log System',
-      '消息系统': 'Messaging System'
-    },
     // Relationship reason translations (key is Chinese reason from backend)
     reasons: {
       '数据库显式外键约束': 'Database explicit foreign key constraint',
@@ -424,16 +411,123 @@ export default {
       globalSearch: 'Global Search'
     },
     about: {
-      version: 'Version v0.1.0',
+      version: 'Version v1.0.0',
       desc: 'Intelligent database Schema analysis, logical foreign key inference and ER model generation platform.\nThrough automatic Schema parsing, rule-based candidate generation, AI semantic judgment, visual ER editing and document export, it helps developers quickly build reliable database structure understanding.',
-      docs: 'Documentation',
-      feedback: 'Feedback',
+      feedback: 'Feedback/Suggestions',
       changelog: 'Changelog'
     },
     buttons: {
       close: 'Close',
       cancel: 'Cancel',
       confirm: 'Confirm'
+    }
+  },
+  aiSuggestions: {
+    title: 'AI Relationship Suggestions Review',
+    backToEditor: 'Back to ER Editor',
+    subtitle: {
+      withSuggestions: 'The model found {count} potential logical foreign keys. Please confirm or reject these suggestions.',
+      noNewWithFks: 'No new suggestions from this AI analysis. The database already has {count} explicit foreign key relationships.',
+      notAnalyzed: 'Not analyzed yet. Click the button below to start AI relationship analysis.'
+    },
+    confidence: {
+      high: 'High Confidence',
+      medium: 'Medium Confidence',
+      low: 'Low Confidence',
+      handled: 'Handled'
+    },
+    filter: {
+      all: 'All ({count})',
+      high: 'High ({count})',
+      medium: 'Medium ({count})',
+      low: 'Low ({count})',
+      pending: 'Pending ({count})'
+    },
+    tableFilterPlaceholder: 'Filter by table',
+    reanalyze: 'Re-analyze',
+    confirmAllVisible: 'Confirm All in Current Filter',
+    rejectAllVisible: 'Reject All in Current Filter',
+    aiInference: 'AI Inference',
+    reasonsTitle: 'AI Inference Basis',
+    typeMatch: 'Type compatible: {sourceType} ↔ {targetType}',
+    status: {
+      confirmed: 'Confirmed',
+      rejected: 'Rejected'
+    },
+    confirmRelation: 'Confirm Relationship',
+    reject: 'Reject',
+    resetAction: 'Undo',
+    batchSelect: 'Batch Select',
+    empty: {
+      noSuggestions: 'No suggestions under current filter'
+    },
+    startAnalysis: 'Start AI Relationship Analysis',
+    restartAnalysis: 'Restart AI Analysis',
+    coverageFullBanner: {
+      title: '🎉 Database Explicit FK Coverage is High',
+      line1: 'No new candidate relationships were found by the rule-based field-name matching, so LLM call was automatically skipped to save tokens and time.',
+      line2: 'The current physical foreign keys already cover all logical associations that AI can normally identify.',
+      line3: 'If you still believe there are unrecognized implicit relationships (such as many-to-many bridge tables or 1:1 extension tables), you can manually drag and connect them in the ER editor.'
+    },
+    existingAlert: {
+      title: 'No new logical foreign keys found in this AI analysis, but {count} explicit FK relationships already exist in the database',
+      line1: 'These foreign keys were automatically parsed during database schema synchronization and are displayed as solid lines in the ER editor.',
+      line2: 'AI skipped analysis because the rule-based field-name matching found no new candidate relationships, indicating that existing foreign keys may already cover the main logical associations.',
+      line3: 'To add implicit relationships in the ER diagram (such as abbreviated naming or many-to-many bridge tables), manually drag to create connections in the ER editor.'
+    },
+    existingFks: {
+      title: 'Existing Database Foreign Keys (Read-only Reference)',
+      count: '{count} records'
+    },
+    databaseFkTag: 'DB FK',
+    selectedCount: '{count} suggestions selected',
+    batchConfirm: 'Batch Confirm',
+    batchReject: 'Batch Reject',
+    cancelSelection: 'Cancel Selection',
+    cancelAnalysis: 'Cancel Analysis',
+    loading: {
+      preparing: 'Preparing...',
+      submitting: 'Submitting analysis task...',
+      parsingFallback: 'Parsing...',
+      cancelling: 'Cancelling...'
+    },
+    statusText: {
+      pending: 'Waiting to start...',
+      parsing: 'Parsing schema structure...',
+      analyzing: 'Generating candidate relationships...',
+      validating: 'AI is analyzing relationships...',
+      completed: 'Analysis completed',
+      failed: 'Analysis failed',
+      cancelled: 'Cancelled'
+    },
+    analysisConfirm: {
+      title: 'Start AI Analysis',
+      message: 'This will start an AI relationship analysis task, which may consume model tokens and take tens of seconds. Continue?',
+      confirm: 'Start Analysis',
+      cancel: 'Cancel'
+    },
+    messages: {
+      loadFailed: 'Failed to load AI suggestions',
+      noTaskId: 'No task ID returned',
+      analysisTimeout: 'Analysis timed out, please try again later',
+      analysisFailed: 'Analysis failed',
+      analysisCompleted: 'AI relationship analysis completed',
+      fkCoverageFull: 'Database explicit FK coverage is high; LLM call was automatically skipped to save tokens and time.',
+      cancelled: 'Cancelled',
+      analysisCancelled: 'AI analysis cancelled',
+      startAnalysisFailed: 'Failed to start analysis',
+      relationConfirmed: 'Relationship suggestion confirmed (return to ER editor to see the connection)',
+      confirmFailed: 'Failed to confirm, please try again later',
+      relationRejected: 'Relationship suggestion rejected',
+      rejectFailed: 'Failed to reject, please try again later',
+      resetSuccess: 'Undone; you can continue reviewing',
+      resetFailed: 'Unable to undo this relationship',
+      batchConfirmed: 'Confirmed {count} suggestions (return to ER editor to see the connections)',
+      batchConfirmFailed: 'Batch confirmation failed',
+      batchRejected: 'Rejected {count} suggestions',
+      batchRejectFailed: 'Batch rejection failed',
+      autoConfirmedHigh: 'Auto-confirmed {count} high-confidence suggestions',
+      autoConfirmHighFailed: 'Failed to auto-confirm high-confidence suggestions'
     }
   },
   llm: {

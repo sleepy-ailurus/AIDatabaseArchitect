@@ -350,7 +350,7 @@
           </div>
           <div class="about-section">
             <div class="about-logo">
-              <el-icon :size="40" color="#3B82F6"><DataBase /></el-icon>
+              <img :src="logoImg" alt="logo" />
             </div>
             <div class="about-name">AI Database Architect</div>
             <div class="about-version">{{ t('settings.about.version') }}</div>
@@ -358,9 +358,8 @@
               {{ t('settings.about.desc') }}
             </div>
             <div class="about-links">
-              <el-button text type="primary" size="small"><el-icon><Link /></el-icon> {{ t('settings.about.docs') }}</el-button>
-              <el-button text type="primary" size="small"><el-icon><ChatDotRound /></el-icon> {{ t('settings.about.feedback') }}</el-button>
-              <el-button text type="primary" size="small"><el-icon><InfoFilled /></el-icon> {{ t('settings.about.changelog') }}</el-button>
+              <a class="about-todo-link" href="https://github.com/sleepy-aliurus/AIDatabaseArchitect/issues" target="_blank" rel="noopener"><el-icon><ChatDotRound /></el-icon> {{ t('settings.about.feedback') }}</a>
+              <a class="about-todo-link" href="https://github.com/sleepy-aliurus/AIDatabaseArchitect" target="_blank" rel="noopener"><el-icon><InfoFilled /></el-icon> {{ t('settings.about.changelog') }}</a>
             </div>
           </div>
         </template>
@@ -410,6 +409,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getLLMConfigs, saveLLMConfig, deleteLLMConfig, testLLMConfig, updateLLMConfig } from '@/api/llm'
 import { useSettingsStore } from '@/stores/settings'
+import logoImg from '@/resource/theme.png'
 
 const { t } = useI18n()
 defineEmits(['close'])
@@ -1660,6 +1660,14 @@ onMounted(() => {
     align-items: center;
     justify-content: center;
     margin-bottom: 16px;
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
   }
 
   .about-name {
@@ -1687,6 +1695,28 @@ onMounted(() => {
     display: flex;
     gap: 12px;
     margin-top: 24px;
+  }
+
+  .about-todo-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: $text-secondary;
+    text-decoration: none;
+    padding: 6px 12px;
+    border: 1px dashed $border-light;
+    border-radius: $radius-md;
+    transition: $transition-base;
+
+    &:hover {
+      color: $primary-color;
+      border-color: $primary-color;
+    }
+
+    .el-icon {
+      font-size: 14px;
+    }
   }
 }
 
@@ -1734,6 +1764,11 @@ html.dark .settings-root {
     .about-name { color: #f8fafc; }
     .about-version { color: #94a3b8; }
     .about-desc { color: #cbd5e1; }
+    .about-todo-link {
+      color: #94a3b8;
+      border-color: #475569;
+      &:hover { color: #60a5fa; border-color: #60a5fa; }
+    }
   }
 
   :deep(.provider-card) {

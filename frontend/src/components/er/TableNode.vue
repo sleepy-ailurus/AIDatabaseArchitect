@@ -477,7 +477,7 @@ const handleMenuCommand = async (cmd) => {
   // Push all four anchors slightly outside the node edge so the line-end
   // markers (crow's foot) are never clipped by the table body.
   &.vue-flow__handle-top {
-    transform: translate(-50%, calc(-50% - 6px));
+    transform: translate(-50%, calc(-50% - 5px));
   }
 
   &.vue-flow__handle-right {

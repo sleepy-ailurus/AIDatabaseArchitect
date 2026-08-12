@@ -81,7 +81,7 @@
                     <el-icon :size="20" :color="getProjectColor(row.id)"><DataBase /></el-icon>
                   </div>
                   <div class="project-info">
-                    <div class="project-name">{{ tData('projectNames', row.name) }}</div>
+                    <div class="project-name">{{ row.name }}</div>
                     <div class="project-meta">
                       <el-tag size="small" effect="plain" :type="getDbTypeTag(row.db_type || row.dbType)">
                         {{ getDbTypeLabel(row.db_type || row.dbType) }}
@@ -161,7 +161,7 @@
           <div class="task-list" v-if="recentProjects.length > 0">
             <div class="task-item" v-for="p in recentProjects.slice(0, 3)" :key="p.id">
               <div class="flex-between">
-                <div class="task-name">{{ tData('projectNames', p.name) }}</div>
+                <div class="task-name">{{ p.name }}</div>
                 <el-tag size="small" :type="getStatusTag(p.status)">{{ getStatusLabel(p.status) }}</el-tag>
               </div>
               <div style="font-size: 12px; color: #94A3B8; margin-top: 4px;">
@@ -174,15 +174,24 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="showCreateDialog" :title="t('project.form.titleNew')" width="560px" :close-on-click-modal="false">
-      <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="100px" style="margin-top: 8px;">
-        <el-form-item :label="t('project.form.name')" prop="name">
+    <el-dialog v-model="showCreateDialog" :title="t('project.form.titleNew')" width="620px" :close-on-click-modal="false">
+      <el-form :model="createForm" :rules="createRules" ref="createFormRef" :label-width="createLabelWidth" style="margin-top: 8px;">
+        <el-form-item prop="name">
+          <template #label>
+            <span style="white-space: nowrap;">{{ t('project.form.name') }}</span>
+          </template>
           <el-input v-model="createForm.name" :placeholder="t('project.form.namePlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('project.form.description')">
+        <el-form-item>
+          <template #label>
+            <span style="white-space: nowrap;">{{ t('project.form.description') }}</span>
+          </template>
           <el-input v-model="createForm.description" type="textarea" :rows="3" :placeholder="t('project.form.descriptionPlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('project.form.dbType')" prop="db_type">
+        <el-form-item prop="db_type">
+          <template #label>
+            <span style="white-space: nowrap;">{{ t('project.form.dbType') }}</span>
+          </template>
           <el-select v-model="createForm.db_type" style="width: 100%;" :placeholder="t('project.form.selectDbType')">
             <el-option label="MySQL 8.x" value="mysql">
               <div class="db-option">
@@ -210,7 +219,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -221,6 +230,9 @@ import { useDataI18n } from '@/i18n'
 
 const { t, locale } = useI18n()
 const { tData } = useDataI18n()
+// Fixed label width per locale so all inputs line up: Chinese labels are short
+// (~110px), English labels need more room (~150px).
+const createLabelWidth = computed(() => (locale.value === 'zh-CN' ? '110px' : '150px'))
 
 const router = useRouter()
 const projectStore = useProjectStore()

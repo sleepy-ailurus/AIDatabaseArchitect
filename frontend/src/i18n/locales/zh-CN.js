@@ -7,18 +7,6 @@ export default {
   },
   // Dynamic data translations - map backend Chinese values (pass-through for zh)
   data: {
-    projectNames: {
-      '学生管理系统': '学生管理系统',
-      '访腾讯会议': '访腾讯会议',
-      '电商平台': '电商平台',
-      '订单系统': '订单系统',
-      '支付系统': '支付系统',
-      '用户中心': '用户中心',
-      '商品管理': '商品管理',
-      '库存管理': '库存管理',
-      '日志系统': '日志系统',
-      '消息系统': '消息系统'
-    },
     reasons: {
       '数据库显式外键约束': '数据库显式外键约束',
       '列名命名模式匹配': '列名命名模式匹配',
@@ -422,16 +410,123 @@ export default {
       globalSearch: '全局搜索'
     },
     about: {
-      version: '版本 v0.1.0',
+      version: '版本 v1.0.0',
       desc: '智能数据库 Schema 分析、逻辑外键推断与 ER 模型生成平台。\n通过 Schema 自动解析、规则候选生成、AI 语义判断、可视化 ER 编辑和文档导出，帮助开发人员快速建立可靠的数据库结构认知。',
-      docs: '文档',
-      feedback: '反馈',
+      feedback: '反馈/建议',
       changelog: '更新日志'
     },
     buttons: {
       close: '关闭',
       cancel: '取消',
       confirm: '确认'
+    }
+  },
+  aiSuggestions: {
+    title: 'AI 关系建议审核',
+    backToEditor: '返回 ER 编辑器',
+    subtitle: {
+      withSuggestions: '模型已分析出 {count} 条潜在逻辑外键，请确认或拒绝这些建议',
+      noNewWithFks: '本次 AI 分析未发现新建议，数据库已存在 {count} 条显式外键关系',
+      notAnalyzed: '尚未分析，点击下方按钮启动 AI 关系分析'
+    },
+    confidence: {
+      high: '高置信度',
+      medium: '中置信度',
+      low: '低置信度',
+      handled: '已处理'
+    },
+    filter: {
+      all: '全部 ({count})',
+      high: '高置信度 ({count})',
+      medium: '中置信度 ({count})',
+      low: '低置信度 ({count})',
+      pending: '待处理 ({count})'
+    },
+    tableFilterPlaceholder: '按表筛选',
+    reanalyze: '重新分析',
+    confirmAllVisible: '全部确认当前筛选',
+    rejectAllVisible: '全部拒绝当前筛选',
+    aiInference: 'AI 推断',
+    reasonsTitle: 'AI 推断依据',
+    typeMatch: '字段类型兼容: {sourceType} ↔ {targetType}',
+    status: {
+      confirmed: '您已确认',
+      rejected: '您已拒绝'
+    },
+    confirmRelation: '确认关系',
+    reject: '拒绝',
+    resetAction: '撤销操作',
+    batchSelect: '批量选择',
+    empty: {
+      noSuggestions: '当前筛选条件下无建议'
+    },
+    startAnalysis: '启动 AI 关系分析',
+    restartAnalysis: '重新启动 AI 分析',
+    coverageFullBanner: {
+      title: '🎉 数据库显式外键覆盖度很高',
+      line1: '基于字段名匹配的规则法未发现新的候选关系，为避免浪费 Token 和耗时，已自动跳过 LLM 调用。',
+      line2: '当前数据库的物理外键已覆盖 AI 常规可识别的全部逻辑关联。',
+      line3: '若你仍认为存在未被识别的隐式关系（如多对多桥接表、1:1 扩展表等），可直接在 ER 编辑器中手动拖拽连线创建。'
+    },
+    existingAlert: {
+      title: '本次 AI 分析未发现新的逻辑外键，但检测到数据库中已存在 {count} 条显式外键关系',
+      line1: '这些外键由数据库 Schema 同步时自动解析，已在 ER 编辑器中以实线显示。',
+      line2: 'AI 跳过分析是因为基于字段名匹配的规则法未发现新的候选关系，说明现有外键可能已经覆盖了主要的逻辑关联。',
+      line3: '如需在 ER 图中补充隐式关系（如缩写命名、多对多桥接表等），可在 ER 编辑器中手动拖拽连线创建。'
+    },
+    existingFks: {
+      title: '已有的数据库外键（只读参考）',
+      count: '{count} 条'
+    },
+    databaseFkTag: '数据库 FK',
+    selectedCount: '已选中 {count} 条建议',
+    batchConfirm: '批量确认',
+    batchReject: '批量拒绝',
+    cancelSelection: '取消选择',
+    cancelAnalysis: '取消分析',
+    loading: {
+      preparing: '准备中...',
+      submitting: '正在提交分析任务...',
+      parsingFallback: '解析中...',
+      cancelling: '正在取消...'
+    },
+    statusText: {
+      pending: '等待开始...',
+      parsing: '正在解析 Schema 结构...',
+      analyzing: '正在生成候选关系...',
+      validating: 'AI 正在分析关系中...',
+      completed: '分析完成',
+      failed: '分析失败',
+      cancelled: '已取消'
+    },
+    analysisConfirm: {
+      title: '启动 AI 分析',
+      message: '将启动 AI 关系分析任务，可能需要消耗模型 token 并耗时数十秒。是否继续？',
+      confirm: '开始分析',
+      cancel: '取消'
+    },
+    messages: {
+      loadFailed: '加载 AI 建议失败',
+      noTaskId: '未获取到任务 ID',
+      analysisTimeout: '分析超时，请稍后重试',
+      analysisFailed: '分析失败',
+      analysisCompleted: 'AI 关系分析已完成',
+      fkCoverageFull: '数据库显式外键覆盖度很高，已自动跳过 LLM 调用，节省 Token 与时间。',
+      cancelled: '已取消',
+      analysisCancelled: '已取消 AI 分析',
+      startAnalysisFailed: '启动分析失败',
+      relationConfirmed: '已确认该关系建议（返回ER编辑器即可看到连线）',
+      confirmFailed: '确认失败，请稍后重试',
+      relationRejected: '已拒绝该关系建议',
+      rejectFailed: '拒绝失败，请稍后重试',
+      resetSuccess: '已撤销，可继续审核',
+      resetFailed: '无法撤销该关系',
+      batchConfirmed: '已确认 {count} 条建议（返回ER编辑器即可看到连线）',
+      batchConfirmFailed: '批量确认失败',
+      batchRejected: '已拒绝 {count} 条建议',
+      batchRejectFailed: '批量拒绝失败',
+      autoConfirmedHigh: '已自动确认 {count} 条高置信度建议',
+      autoConfirmHighFailed: '批量确认高置信度建议失败'
     }
   },
   llm: {

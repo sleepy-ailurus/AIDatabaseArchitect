@@ -21,7 +21,7 @@ const localeMap = {
 /**
  * Translate a dynamic data value using the data mapping dictionaries.
  * Falls back to the original value if no mapping is found.
- * @param {string} category - 'projectNames' | 'reasons'
+ * @param {string} category - 'reasons'
  * @param {string} value - The original Chinese value from backend
  * @returns {string} Translated value or original value
  */

@@ -3,20 +3,20 @@
     <div class="page-toolbar">
       <div class="toolbar-left">
         <el-button text @click="$router.back()">
-          <el-icon style="margin-right: 4px;"><ArrowLeft /></el-icon>返回 ER 编辑器
+          <el-icon style="margin-right: 4px;"><ArrowLeft /></el-icon>{{ t('aiSuggestions.backToEditor') }}
         </el-button>
         <el-divider direction="vertical" />
         <div>
-          <h2 class="toolbar-title">AI 关系建议审核</h2>
+          <h2 class="toolbar-title">{{ t('aiSuggestions.title') }}</h2>
           <p class="toolbar-sub">
             <template v-if="suggestions.length > 0">
-              模型已分析出 {{ suggestions.length }} 条潜在逻辑外键，请确认或拒绝这些建议
+              {{ t('aiSuggestions.subtitle.withSuggestions', { count: suggestions.length }) }}
             </template>
             <template v-else-if="existingFks.length > 0">
-              本次 AI 分析未发现新建议，数据库已存在 {{ existingFks.length }} 条显式外键关系
+              {{ t('aiSuggestions.subtitle.noNewWithFks', { count: existingFks.length }) }}
             </template>
             <template v-else>
-              尚未分析，点击下方按钮启动 AI 关系分析
+              {{ t('aiSuggestions.subtitle.notAnalyzed') }}
             </template>
           </p>
         </div>
@@ -26,19 +26,19 @@
         <div class="summary-cards">
           <div class="sum-card high">
             <span class="sum-num">{{ highCount }}</span>
-            <span class="sum-label">高置信度</span>
+            <span class="sum-label">{{ t('aiSuggestions.confidence.high') }}</span>
           </div>
           <div class="sum-card medium">
             <span class="sum-num">{{ mediumCount }}</span>
-            <span class="sum-label">中置信度</span>
+            <span class="sum-label">{{ t('aiSuggestions.confidence.medium') }}</span>
           </div>
           <div class="sum-card low">
             <span class="sum-num">{{ lowCount }}</span>
-            <span class="sum-label">低置信度</span>
+            <span class="sum-label">{{ t('aiSuggestions.confidence.low') }}</span>
           </div>
           <div class="sum-card handled">
             <span class="sum-num">{{ handledCount }}/{{ suggestions.length }}</span>
-            <span class="sum-label">已处理</span>
+            <span class="sum-label">{{ t('aiSuggestions.confidence.handled') }}</span>
           </div>
         </div>
       </div>
@@ -52,35 +52,35 @@
       class="coverage-banner"
       @close="fkCoverageFullBanner = false"
     >
-      <template #title>🎉 数据库显式外键覆盖度很高</template>
+      <template #title>{{ t('aiSuggestions.coverageFullBanner.title') }}</template>
       <div style="line-height: 1.6;">
-        基于字段名匹配的规则法未发现新的候选关系，为避免浪费 Token 和耗时，已自动跳过 LLM 调用。
-        当前数据库的物理外键已覆盖 AI 常规可识别的全部逻辑关联。
-        若你仍认为存在未被识别的隐式关系（如多对多桥接表、1:1 扩展表等），可直接在 ER 编辑器中手动拖拽连线创建。
+        {{ t('aiSuggestions.coverageFullBanner.line1') }}
+        {{ t('aiSuggestions.coverageFullBanner.line2') }}
+        {{ t('aiSuggestions.coverageFullBanner.line3') }}
       </div>
     </el-alert>
 
     <div class="filter-bar">
       <el-radio-group v-model="filter" size="default">
-        <el-radio-button value="all">全部 ({{ suggestions.length }})</el-radio-button>
-        <el-radio-button value="high">高置信度 ({{ highCount }})</el-radio-button>
-        <el-radio-button value="medium">中置信度 ({{ mediumCount }})</el-radio-button>
-        <el-radio-button value="low">低置信度 ({{ lowCount }})</el-radio-button>
-        <el-radio-button value="pending">待处理 ({{ pendingCount }})</el-radio-button>
+        <el-radio-button value="all">{{ t('aiSuggestions.filter.all', { count: suggestions.length }) }}</el-radio-button>
+        <el-radio-button value="high">{{ t('aiSuggestions.filter.high', { count: highCount }) }}</el-radio-button>
+        <el-radio-button value="medium">{{ t('aiSuggestions.filter.medium', { count: mediumCount }) }}</el-radio-button>
+        <el-radio-button value="low">{{ t('aiSuggestions.filter.low', { count: lowCount }) }}</el-radio-button>
+        <el-radio-button value="pending">{{ t('aiSuggestions.filter.pending', { count: pendingCount }) }}</el-radio-button>
       </el-radio-group>
 
       <div class="filter-actions">
-        <el-select v-model="tableFilter" placeholder="按表筛选" clearable filterable style="width: 180px; margin-right: 10px;">
+        <el-select v-model="tableFilter" :placeholder="t('aiSuggestions.tableFilterPlaceholder')" clearable filterable style="width: 180px; margin-right: 10px;">
           <el-option v-for="t in tableOptions" :key="t" :label="t" :value="t" />
         </el-select>
         <el-button :icon="Refresh" :loading="analyzing" @click="runAnalysis">
-          重新分析
+          {{ t('aiSuggestions.reanalyze') }}
         </el-button>
         <el-button :icon="Check" type="success" plain @click="confirmAllVisible" :disabled="pendingCount === 0">
-          全部确认当前筛选
+          {{ t('aiSuggestions.confirmAllVisible') }}
         </el-button>
         <el-button :icon="Close" type="danger" plain @click="rejectAllVisible" :disabled="pendingCount === 0">
-          全部拒绝当前筛选
+          {{ t('aiSuggestions.rejectAllVisible') }}
         </el-button>
       </div>
     </div>
@@ -122,7 +122,7 @@
                   <el-icon :size="18" color="#64748B"><Right /></el-icon>
                 </div>
                 <el-tag size="small" effect="light" type="warning" class="ai-tag">
-                  <el-icon :size="11"><MagicStick /></el-icon> AI 推断
+                  <el-icon :size="11"><MagicStick /></el-icon> {{ t('aiSuggestions.aiInference') }}
                 </el-tag>
               </div>
 
@@ -136,16 +136,16 @@
             </div>
 
             <div class="reasons-box" v-if="s.reason && s.reason.length">
-              <div class="reasons-title"><el-icon :size="12"><ChatDotRound /></el-icon> AI 推断依据</div>
+              <div class="reasons-title"><el-icon :size="12"><ChatDotRound /></el-icon> {{ t('aiSuggestions.reasonsTitle') }}</div>
               <div class="reasons-list">
                 <span v-for="(r, ri) in s.reason" :key="ri" class="reason-chip">
                   <el-icon :size="10" color="#10B981"><CircleCheckFilled /></el-icon>
-                  {{ r }}
+                  {{ tData('reasons', r) }}
                 </span>
               </div>
               <div class="type-check" v-if="s.typeMatch">
                 <el-icon :size="12" color="#6366F1"><Finished /></el-icon>
-                字段类型兼容: <code>{{ s.sourceType }}</code> ↔ <code>{{ s.targetType }}</code>
+                {{ t('aiSuggestions.typeMatch', { sourceType: s.sourceType, targetType: s.targetType }) }}
               </div>
             </div>
           </div>
@@ -154,40 +154,40 @@
         <div class="card-right">
           <div class="action-history" v-if="s.status !== 'pending'">
             <el-tag v-if="s.status === 'confirmed'" type="success" effect="light" size="small">
-              <el-icon><CircleCheck /></el-icon> 您已确认
+              <el-icon><CircleCheck /></el-icon> {{ t('aiSuggestions.status.confirmed') }}
             </el-tag>
             <el-tag v-if="s.status === 'rejected'" type="danger" effect="light" size="small">
-              <el-icon><CircleClose /></el-icon> 您已拒绝
+              <el-icon><CircleClose /></el-icon> {{ t('aiSuggestions.status.rejected') }}
             </el-tag>
           </div>
 
           <div class="action-buttons" v-if="s.status === 'pending'">
             <el-button type="success" :icon="Check" :loading="s._loading" @click="confirmSuggestion(s)">
-              确认关系
+              {{ t('aiSuggestions.confirmRelation') }}
             </el-button>
             <el-button type="danger" plain :icon="Close" :loading="s._loading" @click="rejectSuggestion(s)">
-              拒绝
+              {{ t('aiSuggestions.reject') }}
             </el-button>
           </div>
 
           <div class="action-buttons" v-else>
             <el-button type="primary" plain size="small" @click="resetStatus(s)">
-              撤销操作
+              {{ t('aiSuggestions.resetAction') }}
             </el-button>
           </div>
         </div>
 
         <div class="card-progress" v-if="s.status === 'pending'">
           <el-checkbox v-model="s.selected" style="margin-right: 12px;">
-            <span style="font-size: 11px; color: #94A3B8;">批量选择</span>
+            <span style="font-size: 11px; color: #94A3B8;">{{ t('aiSuggestions.batchSelect') }}</span>
           </el-checkbox>
           <span style="font-size: 11px; color: #CBD5E1;">#{{ idx + 1 }}</span>
         </div>
       </div>
 
-      <el-empty v-if="!loading && filteredSuggestions.length === 0 && existingFks.length === 0" description="当前筛选条件下无建议">
+      <el-empty v-if="!loading && filteredSuggestions.length === 0 && existingFks.length === 0" :description="t('aiSuggestions.empty.noSuggestions')">
         <el-button type="primary" :icon="MagicStick" :loading="analyzing" @click="runAnalysis">
-          启动 AI 关系分析
+          {{ t('aiSuggestions.startAnalysis') }}
         </el-button>
       </el-empty>
 
@@ -202,19 +202,19 @@
           class="fk-info-alert"
         >
           <template #title>
-            本次 AI 分析未发现新的逻辑外键，但检测到数据库中已存在 {{ existingFks.length }} 条显式外键关系
+            {{ t('aiSuggestions.existingAlert.title', { count: existingFks.length }) }}
           </template>
           <div style="line-height: 1.6;">
-            这些外键由数据库 Schema 同步时自动解析，已在 ER 编辑器中以实线显示。
-            AI 跳过分析是因为基于字段名匹配的规则法未发现新的候选关系，说明现有外键可能已经覆盖了主要的逻辑关联。
-            如需在 ER 图中补充隐式关系（如缩写命名、多对多桥接表等），可在 ER 编辑器中手动拖拽连线创建。
+            {{ t('aiSuggestions.existingAlert.line1') }}
+            {{ t('aiSuggestions.existingAlert.line2') }}
+            {{ t('aiSuggestions.existingAlert.line3') }}
           </div>
         </el-alert>
 
         <div class="existing-fk-list">
           <div class="existing-fk-header">
-            <span class="section-title">已有的数据库外键（只读参考）</span>
-            <span class="section-count">{{ existingFks.length }} 条</span>
+            <span class="section-title">{{ t('aiSuggestions.existingFks.title') }}</span>
+            <span class="section-count">{{ t('aiSuggestions.existingFks.count', { count: existingFks.length }) }}</span>
           </div>
           <div v-for="fk in existingFks" :key="fk.id" class="existing-fk-card">
             <div class="fk-path">
@@ -232,7 +232,7 @@
                   <el-icon :size="18" color="#64748B"><Right /></el-icon>
                 </div>
                 <el-tag size="small" effect="plain" type="info" class="fk-tag">
-                  <el-icon :size="11"><Connection /></el-icon> 数据库 FK
+                  <el-icon :size="11"><Connection /></el-icon> {{ t('aiSuggestions.databaseFkTag') }}
                 </el-tag>
               </div>
               <div class="table-block target">
@@ -248,7 +248,7 @@
 
         <div class="empty-actions">
           <el-button type="primary" :icon="MagicStick" :loading="analyzing" @click="runAnalysis">
-            重新启动 AI 分析
+            {{ t('aiSuggestions.restartAnalysis') }}
           </el-button>
         </div>
       </div>
@@ -256,22 +256,22 @@
 
     <div class="batch-bar" v-if="selectedCount > 0">
       <div class="batch-info">
-        <el-checkbox v-model="allSelected" :indeterminate="someSelected" @change="toggleSelectAll">批量选择</el-checkbox>
+        <el-checkbox v-model="allSelected" :indeterminate="someSelected" @change="toggleSelectAll">{{ t('aiSuggestions.batchSelect') }}</el-checkbox>
         <span style="margin-left: 16px; color: #64748B;">
-          已选中 <strong style="color: #1E293B;">{{ selectedCount }}</strong> 条建议
+          {{ t('aiSuggestions.selectedCount', { count: selectedCount }) }}
         </span>
       </div>
       <div class="batch-actions">
-        <el-button type="success" :icon="Check" @click="batchConfirm">批量确认</el-button>
-        <el-button type="danger" plain :icon="Close" @click="batchReject">批量拒绝</el-button>
-        <el-button text @click="clearSelection">取消选择</el-button>
+        <el-button type="success" :icon="Check" @click="batchConfirm">{{ t('aiSuggestions.batchConfirm') }}</el-button>
+        <el-button type="danger" plain :icon="Close" @click="batchReject">{{ t('aiSuggestions.batchReject') }}</el-button>
+        <el-button text @click="clearSelection">{{ t('aiSuggestions.cancelSelection') }}</el-button>
       </div>
     </div>
 
-    <!-- 全屏加载遮罩 -->
+    <!-- Full-screen loading overlay -->
     <div v-if="analyzing" class="loading-overlay">
       <div class="loading-box">
-        <button class="loading-close-btn" @click="cancelAnalysis" title="取消分析">
+        <button class="loading-close-btn" @click="cancelAnalysis" :title="t('aiSuggestions.cancelAnalysis')">
           <el-icon :size="16"><Close /></el-icon>
         </button>
         <div class="loading-spinner"></div>
@@ -294,6 +294,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { useDataI18n } from '@/i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
@@ -323,6 +325,8 @@ import {
 } from '@/api/relationship'
 import { useSettingsStore } from '@/stores/settings'
 
+const { t } = useI18n()
+const { tData } = useDataI18n()
 const route = useRoute()
 const projectId = computed(() => route.params.id)
 const settingsStore = useSettingsStore()
@@ -350,11 +354,12 @@ const allSelected = ref(false)
 const loading = ref(false)
 const analyzing = ref(false)
 const analyzeProgress = ref(0)
-const loadingText = ref('准备中...')
+const loadingText = ref(t('aiSuggestions.loading.preparing'))
 let pollTimer = null
 let currentTaskId = null
 const cancelled = ref(false)
 const fkCoverageFullBanner = ref(false)
+const CANCELLED_MESSAGE = t('aiSuggestions.messages.cancelled')
 
 const suggestions = reactive([])
 
@@ -426,35 +431,35 @@ const fetchSuggestions = async () => {
   } catch (e) {
     suggestions.splice(0, suggestions.length)
     existingFks.value = []
-    ElMessage.error('加载 AI 建议失败')
+    ElMessage.error(t('aiSuggestions.messages.loadFailed'))
   } finally {
     loading.value = false
   }
 }
 
 const STATUS_TEXT = {
-  pending: '等待开始...',
-  parsing: '正在解析 Schema 结构...',
-  analyzing: '正在生成候选关系...',
-  validating: 'AI 正在分析关系中...',
-  completed: '分析完成',
-  failed: '分析失败',
-  cancelled: '已取消',
+  pending: t('aiSuggestions.statusText.pending'),
+  parsing: t('aiSuggestions.statusText.parsing'),
+  analyzing: t('aiSuggestions.statusText.analyzing'),
+  validating: t('aiSuggestions.statusText.validating'),
+  completed: t('aiSuggestions.statusText.completed'),
+  failed: t('aiSuggestions.statusText.failed'),
+  cancelled: t('aiSuggestions.statusText.cancelled'),
 }
 
 const runAnalysis = async () => {
   try {
     await ElMessageBox.confirm(
-      '将启动 AI 关系分析任务，可能需要消耗模型 token 并耗时数十秒。是否继续？',
-      '启动 AI 分析',
-      { confirmButtonText: '开始分析', cancelButtonText: '取消', type: 'info' }
+      t('aiSuggestions.analysisConfirm.message'),
+      t('aiSuggestions.analysisConfirm.title'),
+      { confirmButtonText: t('aiSuggestions.analysisConfirm.confirm'), cancelButtonText: t('aiSuggestions.analysisConfirm.cancel'), type: 'info' }
     )
   } catch {
     return
   }
   analyzing.value = true
   analyzeProgress.value = 5
-  loadingText.value = '正在提交分析任务...'
+  loadingText.value = t('aiSuggestions.loading.submitting')
   cancelled.value = false
   currentTaskId = null
 
@@ -463,22 +468,22 @@ const runAnalysis = async () => {
     const taskId = task?.id
     currentTaskId = taskId
     if (!taskId) {
-      throw new Error('未获取到任务 ID')
+      throw new Error(t('aiSuggestions.messages.noTaskId'))
     }
 
-    loadingText.value = STATUS_TEXT.parsing || '解析中...'
+    loadingText.value = STATUS_TEXT.parsing || t('aiSuggestions.loading.parsingFallback')
 
-    // 轮询任务状态
+    // Poll task status
     const completedTask = await new Promise((resolve, reject) => {
       const startTs = Date.now()
-      const MAX_WAIT = 180_000 // 3 分钟超时
+      const MAX_WAIT = 180_000 // 3 minutes timeout
 
       pollTimer = setInterval(async () => {
         try {
           if (cancelled.value) {
             clearInterval(pollTimer)
             pollTimer = null
-            reject(new Error('已取消'))
+            reject(new Error(CANCELLED_MESSAGE))
             return
           }
           const t = await getAnalysisTask(taskId)
@@ -493,24 +498,24 @@ const runAnalysis = async () => {
           } else if (t.status === 'failed') {
             clearInterval(pollTimer)
             pollTimer = null
-            reject(new Error(t.error || '分析失败'))
+            reject(new Error(t.error || t('aiSuggestions.messages.analysisFailed')))
           } else if (t.status === 'cancelled') {
             clearInterval(pollTimer)
             pollTimer = null
-            reject(new Error('已取消'))
+            reject(new Error(CANCELLED_MESSAGE))
           } else if (Date.now() - startTs > MAX_WAIT) {
             clearInterval(pollTimer)
             pollTimer = null
-            reject(new Error('分析超时，请稍后重试'))
+            reject(new Error(t('aiSuggestions.messages.analysisTimeout')))
           }
         } catch (err) {
-          if (err.message === '已取消') {
+          if (err.message === CANCELLED_MESSAGE) {
             clearInterval(pollTimer)
             pollTimer = null
             reject(err)
             return
           }
-          // 忽略轮询中的单次网络错误
+          // Ignore transient network errors during polling
           console.warn('Poll error:', err)
         }
       }, 1500)
@@ -522,24 +527,24 @@ const runAnalysis = async () => {
       // called, no tokens were burned, and there's nothing new to audit.
       fkCoverageFullBanner.value = true
       ElMessage.success({
-        message: '数据库显式外键覆盖度很高，已自动跳过 LLM 调用，节省 Token 与时间。',
+        message: t('aiSuggestions.messages.fkCoverageFull'),
         duration: 5000,
       })
     } else {
       fkCoverageFullBanner.value = false
-      ElMessage.success('AI 关系分析已完成')
+      ElMessage.success(t('aiSuggestions.messages.analysisCompleted'))
     }
     await fetchSuggestions()
 
-    // 高置信度默认勾选功能：如果开启，自动确认置信度 >= 85% 的建议
+    // Auto-confirm high-confidence suggestions if the setting is enabled
     if (settingsStore.autoCheckHigh && skipped !== 'fk_coverage_full') {
       autoConfirmHighConfidence()
     }
   } catch (e) {
-    if (e?.message === '已取消') {
-      ElMessage.info('已取消 AI 分析')
+    if (e?.message === t('aiSuggestions.messages.cancelled')) {
+      ElMessage.info(t('aiSuggestions.messages.analysisCancelled'))
     } else {
-      ElMessage.error(e?.message || '启动分析失败')
+      ElMessage.error(e?.message || t('aiSuggestions.messages.startAnalysisFailed'))
     }
   } finally {
     if (pollTimer) {
@@ -556,15 +561,15 @@ const runAnalysis = async () => {
 const cancelAnalysis = async () => {
   if (!currentTaskId || cancelled.value) return
   cancelled.value = true
-  loadingText.value = '正在取消...'
+  loadingText.value = t('aiSuggestions.loading.cancelling')
   try {
     await cancelAnalysisTask(currentTaskId)
   } catch (e) {
-    // 忽略错误，可能任务已完成
+    // Ignore error: task may have already completed
   }
 }
 
-// 组件卸载时清理定时器
+// Cleanup timer when component unmounts
 onUnmounted(() => {
   if (pollTimer) {
     clearInterval(pollTimer)
@@ -616,9 +621,9 @@ const confirmSuggestion = async (s) => {
       ? (SERVER_STATUS_TO_UI[String(updated.status).toLowerCase()] ?? 'confirmed')
       : 'confirmed'
     s.status = uiStatus
-    ElMessage.success('已确认该关系建议（返回ER编辑器即可看到连线）')
+    ElMessage.success(t('aiSuggestions.messages.relationConfirmed'))
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '确认失败，请稍后重试')
+    ElMessage.error(e?.response?.data?.detail || t('aiSuggestions.messages.confirmFailed'))
   } finally {
     s._loading = false
   }
@@ -632,16 +637,16 @@ const rejectSuggestion = async (s) => {
       ? (SERVER_STATUS_TO_UI[String(updated.status).toLowerCase()] ?? 'rejected')
       : 'rejected'
     s.status = uiStatus
-    ElMessage.success('已拒绝该关系建议')
+    ElMessage.success(t('aiSuggestions.messages.relationRejected'))
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '拒绝失败，请稍后重试')
+    ElMessage.error(e?.response?.data?.detail || t('aiSuggestions.messages.rejectFailed'))
   } finally {
     s._loading = false
   }
 }
 
 const resetStatus = async (s) => {
-  // User clicked "撤销操作" — call reset endpoint which writes status=suggested
+  // User clicked reset — call reset endpoint which writes status=suggested
   // server-side, then reflect pending back on the audit row so counters & tabs
   // recompute without a full fetch.
   s._loading = true
@@ -651,9 +656,9 @@ const resetStatus = async (s) => {
       ? (SERVER_STATUS_TO_UI[String(updated.status).toLowerCase()] ?? 'pending')
       : 'pending'
     s.status = uiStatus
-    ElMessage.success('已撤销，可继续审核')
+    ElMessage.success(t('aiSuggestions.messages.resetSuccess'))
   } catch (e) {
-    ElMessage.warning(e?.response?.data?.detail || '无法撤销该关系')
+    ElMessage.warning(e?.response?.data?.detail || t('aiSuggestions.messages.resetFailed'))
   } finally {
     s._loading = false
   }
@@ -672,9 +677,9 @@ const confirmAllVisible = async () => {
         : 'confirmed'
       s.status = uiStatus
     }
-    ElMessage.success(`已确认 ${targets.length} 条建议（返回ER编辑器即可看到连线）`)
+    ElMessage.success(t('aiSuggestions.messages.batchConfirmed', { count: targets.length }))
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || `批量确认失败`)
+    ElMessage.error(e?.response?.data?.detail || t('aiSuggestions.messages.batchConfirmFailed'))
   }
 }
 
@@ -691,9 +696,9 @@ const rejectAllVisible = async () => {
         : 'rejected'
       s.status = uiStatus
     }
-    ElMessage.success(`已拒绝 ${targets.length} 条建议`)
+    ElMessage.success(t('aiSuggestions.messages.batchRejected', { count: targets.length }))
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || `批量拒绝失败`)
+    ElMessage.error(e?.response?.data?.detail || t('aiSuggestions.messages.batchRejectFailed'))
   }
 }
 
@@ -719,9 +724,9 @@ const batchConfirm = async () => {
       s.status = uiStatus
       s.selected = false
     }
-    ElMessage.success(`已批量确认 ${targets.length} 条建议（返回ER编辑器即可看到连线）`)
+    ElMessage.success(t('aiSuggestions.messages.batchConfirmed', { count: targets.length }))
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || `批量确认失败`)
+    ElMessage.error(e?.response?.data?.detail || t('aiSuggestions.messages.batchConfirmFailed'))
   }
 }
 
@@ -739,13 +744,13 @@ const batchReject = async () => {
       s.status = uiStatus
       s.selected = false
     }
-    ElMessage.success(`已批量拒绝 ${targets.length} 条建议`)
+    ElMessage.success(t('aiSuggestions.messages.batchRejected', { count: targets.length }))
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || `批量拒绝失败`)
+    ElMessage.error(e?.response?.data?.detail || t('aiSuggestions.messages.batchRejectFailed'))
   }
 }
 
-// 自动确认高置信度建议
+// Auto-confirm high-confidence suggestions
 const autoConfirmHighConfidence = async () => {
   if (!settingsStore.autoCheckHigh) return
   const highConfSuggestions = suggestions.filter(s => s.confidence >= 0.85 && s.status === 'pending')
@@ -756,14 +761,14 @@ const autoConfirmHighConfidence = async () => {
       highConfSuggestions.forEach(s => {
         s.status = 'confirmed'
       })
-      ElMessage.success(`已自动确认 ${highConfSuggestions.length} 条高置信度建议`)
+      ElMessage.success(t('aiSuggestions.messages.autoConfirmedHigh', { count: highConfSuggestions.length }))
     } catch (e) {
-      console.warn('批量确认高置信度建议失败:', e)
+      console.warn(t('aiSuggestions.messages.autoConfirmHighFailed'), e)
     }
   }
 }
 
-// 切换项目时（组件被复用，仅 route.params.id 变化），重置状态后重新加载数据
+// When switching projects (component reused with only route.params.id changing), reset state and reload data
 watch(projectId, async (newId, oldId) => {
   if (!newId || newId === oldId) return
   if (pollTimer) {
@@ -1137,7 +1142,7 @@ onMounted(async () => {
   gap: 8px;
 }
 
-/* 全屏加载遮罩 */
+/* Full-screen loading overlay */
 .loading-overlay {
   position: fixed;
   inset: 0;
@@ -1208,7 +1213,7 @@ onMounted(async () => {
   align-items: center;
 }
 
-/* ==== 已有数据库外键参考区 ==== */
+/* ==== Existing database FK reference section ==== */
 .existing-fk-section {
   padding: 24px 0;
   max-width: 960px;
@@ -1278,7 +1283,7 @@ onMounted(async () => {
   margin-top: 24px;
 }
 
-/* 覆盖 coverage-banner 以避免冲突 */
+/* Override coverage-banner to avoid conflicts */
 .coverage-banner {
   margin-bottom: 16px;
 }

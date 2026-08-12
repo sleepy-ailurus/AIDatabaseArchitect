@@ -46,7 +46,7 @@
           </div>
 
           <div class="card-body">
-            <div class="project-title">{{ tData('projectNames', p.name) }}</div>
+            <div class="project-title">{{ p.name }}</div>
             <div class="project-desc" v-if="p.description">{{ p.description }}</div>
             <div class="project-desc empty" v-else>{{ t('project.list.noDescription') }}</div>
           </div>
@@ -88,15 +88,24 @@
       </div>
     </div>
 
-    <el-dialog v-model="showCreate" :title="t('project.form.title')" width="560px" :close-on-click-modal="false">
-      <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="100px" style="margin-top: 8px;">
-        <el-form-item :label="t('project.form.name')" prop="name">
+    <el-dialog v-model="showCreate" :title="t('project.form.titleNew')" width="620px" :close-on-click-modal="false" class="project-create-dialog">
+      <el-form :model="createForm" :rules="createRules" ref="createFormRef" :label-width="createLabelWidth" style="margin-top: 8px;">
+        <el-form-item prop="name">
+          <template #label>
+            <span style="white-space: nowrap;">{{ t('project.form.name') }}</span>
+          </template>
           <el-input v-model="createForm.name" :placeholder="t('project.form.namePlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('project.form.description')">
+        <el-form-item>
+          <template #label>
+            <span style="white-space: nowrap;">{{ t('project.form.description') }}</span>
+          </template>
           <el-input v-model="createForm.description" type="textarea" :rows="3" :placeholder="t('project.form.descriptionPlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('project.form.dbType')" prop="db_type">
+        <el-form-item prop="db_type">
+          <template #label>
+            <span style="white-space: nowrap;">{{ t('project.form.dbType') }}</span>
+          </template>
           <el-select v-model="createForm.db_type" style="width: 100%;" :placeholder="t('project.form.selectDbType')">
             <el-option label="MySQL 8.x" value="mysql" />
             <el-option label="PostgreSQL 14+" value="postgresql" disabled />
@@ -109,7 +118,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showVersions" :title="`${t('project.list.versionHistory')} - ${tData('projectNames', versionProject?.name) || ''}`" width="640px" :close-on-click-modal="false">
+    <el-dialog v-model="showVersions" :title="`${t('project.list.versionHistory')} - ${versionProject?.name || ''}`" width="640px" :close-on-click-modal="false">
       <div v-loading="versionLoading" class="version-list">
         <div v-if="!versions.length" class="version-empty">
           <el-empty :description="t('project.list.noVersions')" :image-size="80" />
@@ -151,6 +160,9 @@ import { useDataI18n } from '@/i18n'
 
 const { t, locale } = useI18n()
 const { tData } = useDataI18n()
+// Fixed label width per locale so all inputs line up: Chinese labels are short
+// (~110px), English labels need more room (~150px).
+const createLabelWidth = computed(() => (locale.value === 'zh-CN' ? '110px' : '150px'))
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -268,7 +280,7 @@ const handleCreate = async () => {
 const handleDelete = async (p) => {
   try {
     await ElMessageBox.confirm(
-      t('project.list.deleteConfirm', { name: tData('projectNames', p.name) }),
+      t('project.list.deleteConfirm', { name: p.name }),
       t('project.list.deleteTitle'),
       { type: 'warning', confirmButtonText: t('project.list.confirmDelete'), cancelButtonText: t('project.form.cancel') }
     )
@@ -354,6 +366,20 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 @use '@/styles/variables.scss' as *;
+
+.project-create-dialog {
+  :deep(.el-form-item__label) {
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    padding-right: 18px;
+    line-height: 32px;
+  }
+  :deep(.el-form-item) {
+    display: flex;
+    align-items: flex-start;
+  }
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -616,5 +642,12 @@ html.dark {
       color: #94a3b8 !important;
     }
   }
+}
+</style>
+
+<style>
+.project-create-dialog .el-form-item__label {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
 }
 </style>
