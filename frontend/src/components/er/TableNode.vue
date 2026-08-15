@@ -72,6 +72,11 @@
           <span v-else-if="col.aiSuggested" class="key-icon ai" :title="t('erModel.node.aiSuggest')">✨</span>
         </span>
         <span class="col-name">{{ col.name }}</span>
+        <span v-if="col.comment" class="col-comment">
+          <el-tooltip :content="col.comment" placement="top" :show-after="200" popper-class="er-tip">
+            <span class="comment-icon">📝</span>
+          </el-tooltip>
+        </span>
         <span class="col-type" :class="getTypeClass(col.type)">{{ col.type }}</span>
       </div>
       <div v-if="data.columns && data.columns.length > maxDisplay" class="more-fields">
@@ -423,6 +428,20 @@ const handleMenuCommand = async (cmd) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.col-comment {
+  width: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.comment-icon {
+  font-size: 10px;
+  cursor: help;
+  line-height: 1;
 }
 
 .col-type {

@@ -149,6 +149,113 @@ class SchemaSyncResult(BaseModel):
     relationship_count: int = 0
 
 
+class SchemaImportRequest(BaseModel):
+    source: str = "ddl"  # ddl | dbml
+    content: str = Field(min_length=1)
+    db_type: str = "mysql"
+
+
+# ---------------------------------------------------------------------------
+# Schema review (lint + AI)
+# ---------------------------------------------------------------------------
+class ReviewCreate(BaseModel):
+    run_ai: bool = False
+    llm_config_id: int | None = None
+
+
+class ReviewOut(ORMModel):
+    id: int
+    project_id: int
+    lint_findings: list | None
+    ai_findings: list | None
+    summary: dict | None
+    used_ai: bool
+    created_at: datetime
+
+
+class CommentGenerate(BaseModel):
+    llm_config_id: int | None = None
+
+
+class CommentSuggestionOut(ORMModel):
+    id: int
+    project_id: int
+    table_name: str
+    column_name: str | None
+    target_type: str
+    suggested_comment: str
+    status: str
+    created_at: datetime
+
+
+class CommentUpdate(BaseModel):
+    status: str  # suggested | accepted | rejected
+
+
+class CommentBatchUpdate(BaseModel):
+    ids: list[int]
+    status: str
+
+
+class CommentApply(BaseModel):
+    execute: bool = False
+
+
+class SensitiveScanRequest(BaseModel):
+    include_sampling: bool = False
+    sample_size: int = Field(default=100, ge=1, le=1000)
+
+
+class SensitiveFieldOut(ORMModel):
+    id: int
+    project_id: int
+    table_name: str
+    column_name: str
+    category: str
+    category_label: str
+    risk_level: str
+    confidence: float
+    matched_reason: str | None
+    sample_hits: int | None
+    sample_total: int | None
+    status: str
+    created_at: datetime
+
+
+class SensitiveUpdate(BaseModel):
+    status: str  # detected | confirmed | false_positive | mitigated
+
+
+class TestDataGenerate(BaseModel):
+    rows_per_table: int = Field(default=10, ge=1, le=500)
+    execute: bool = False
+
+
+class DomainAnalyze(BaseModel):
+    use_ai_names: bool = False
+    llm_config_id: int | None = None
+
+
+class DomainOut(BaseModel):
+    cluster_index: int
+    name: str
+    description: str | None = None
+    tables: list[str] = []
+
+
+class LineageAnalyze(BaseModel):
+    sql_text: str = Field(min_length=1)
+
+
+class LineageImpact(BaseModel):
+    table: str = Field(min_length=1)
+
+
+class DesignDocRequest(BaseModel):
+    author: str = ""
+    student_id: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Relationships
 # ---------------------------------------------------------------------------
@@ -232,6 +339,28 @@ class ERModelVersionOut(ORMModel):
     version_data: dict | None
     note: str | None
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Concept models (ER concept model / Chen notation)
+# ---------------------------------------------------------------------------
+class ConceptModelConvert(BaseModel):
+    use_ai_names: bool = False
+    llm_config_id: int | None = None
+
+
+class ConceptModelData(BaseModel):
+    entities: list[dict] = []
+    relations: list[dict] = []
+    viewport: dict | None = None
+
+
+class ConceptModelOut(ORMModel):
+    id: int
+    project_id: int
+    model_data: dict | None
+    created_at: datetime
+    updated_at: datetime
 
 
 # ---------------------------------------------------------------------------

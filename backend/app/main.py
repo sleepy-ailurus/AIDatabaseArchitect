@@ -17,13 +17,22 @@ from app.config import BASE_DIR, settings
 from app.database import init_db
 from app.routers import (
     analysis,
+    comments,
+    concept_models,
     connections,
+    data_gen,
+    docs,
+    domains,
     er_models,
     exports,
+    imports,
+    lineage,
     llm_configs,
     projects,
     relationships,
+    reviews,
     schema,
+    sensitive,
     user_settings,
 )
 
@@ -62,7 +71,16 @@ app.include_router(connections.router)
 app.include_router(schema.router)
 app.include_router(relationships.router)
 app.include_router(er_models.router)
+app.include_router(concept_models.router)
+app.include_router(imports.router)
 app.include_router(llm_configs.router)
+app.include_router(reviews.router)
+app.include_router(comments.router)
+app.include_router(sensitive.router)
+app.include_router(data_gen.router)
+app.include_router(domains.router)
+app.include_router(lineage.router)
+app.include_router(docs.router)
 app.include_router(exports.router)
 app.include_router(analysis.router)
 app.include_router(user_settings.router)

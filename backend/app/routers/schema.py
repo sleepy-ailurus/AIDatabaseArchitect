@@ -11,10 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
+    CommentSuggestion,
     DatabaseConnection,
     Project,
-    Relationship,
-    SchemaColumn,
     SchemaSnapshot,
     SchemaTable,
 )
@@ -25,8 +24,9 @@ from app.schemas import (
     TableOut,
 )
 from app.services import crypto
-from app.services.relation_candidate import normalize_relationship_direction
+from app.services.schema_persist import persist_schema_snapshot
 from app.services.schema_parser import SchemaParseError, parse_schema
+from app.services.schema_diff import diff_from_snapshots
 
 router = APIRouter(prefix="/api", tags=["schema"])
 
@@ -76,125 +76,10 @@ def sync_schema(project_id: int, db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Schema 解析失败: {exc}") from exc
 
-    # Determine the next snapshot version for this project.
-    last_version = (
-        db.query(SchemaSnapshot)
-        .filter(SchemaSnapshot.project_id == project_id)
-        .order_by(SchemaSnapshot.version.desc())
-        .first()
-    )
-    next_version = (last_version.version + 1) if last_version else 1
-
-    snapshot = SchemaSnapshot(
-        project_id=project_id,
-        snapshot_data=schema.to_dict(),
-        version=next_version,
-    )
-    db.add(snapshot)
-    db.flush()
-
-    for t in schema.tables:
-        table_row = SchemaTable(
-            snapshot_id=snapshot.id,
-            table_name=t.name,
-            comment=t.comment,
-            engine=t.engine,
-        )
-        db.add(table_row)
-        db.flush()
-        for c in t.columns:
-            db.add(
-                SchemaColumn(
-                    table_id=table_row.id,
-                    column_name=c.name,
-                    data_type=c.data_type,
-                    length=c.length,
-                    nullable=c.nullable,
-                    default_value=c.default_value,
-                    is_primary_key=c.is_primary_key,
-                    is_unique=c.is_unique,
-                    comment=c.comment,
-                )
-            )
-
-    # Persist explicit foreign-key relationships (database_constraint).
-    relationship_count = 0
-    # Build lookup helpers to determine FK cardinality based on PK/UNIQUE column flags.
-    _tables_by_name = {t.name: t for t in schema.tables}
-    def _col(tbl_name, col_name):
-        tbl = _tables_by_name.get(tbl_name)
-        if not tbl:
-            return None
-        return next((c for c in tbl.columns if c.name == col_name), None)
-
-    for t in schema.tables:
-        for fk in t.foreign_keys:
-            source_col = fk.get("source_column")
-            target_table = fk.get("target_table")
-            target_col = fk.get("target_column")
-            if not (source_col and target_table and target_col):
-                continue
-
-            sc_obj = _col(t.name, source_col)
-            tc_obj = _col(target_table, target_col)
-            src_is_pk = bool(getattr(sc_obj, "is_primary_key", False))
-            tgt_is_pk = bool(getattr(tc_obj, "is_primary_key", False))
-            src_is_unique = bool(getattr(sc_obj, "is_unique", False))
-
-            # Same cardinality rules as llm_service._validate_result — the two must stay in sync.
-            if not src_is_pk and tgt_is_pk:
-                # FK col points at a PK target
-                card = "one-to-one" if src_is_unique else "many-to-one"
-            elif src_is_pk and not tgt_is_pk:
-                card = "one-to-many"
-            elif src_is_pk and tgt_is_pk:
-                card = "one-to-one"
-            else:
-                card = "many-to-one"
-
-            # Normalize (flip N:1 endpoints into 1:N, etc.)
-            st, sc, tt, tc, card_norm = normalize_relationship_direction(
-                t.name,
-                source_col,
-                target_table,
-                target_col,
-                card,
-            )
-            # Avoid duplicating an already-confirmed constraint relationship.
-            existing = (
-                db.query(Relationship)
-                .filter(
-                    Relationship.project_id == project_id,
-                    Relationship.source_table == st,
-                    Relationship.source_column == sc,
-                    Relationship.target_table == tt,
-                    Relationship.target_column == tc,
-                    Relationship.source_type == "database_constraint",
-                )
-                .first()
-            )
-            if existing:
-                continue
-            db.add(
-                Relationship(
-                    project_id=project_id,
-                    source_table=st,
-                    source_column=sc,
-                    target_table=tt,
-                    target_column=tc,
-                    cardinality=card_norm,
-                    confidence=1.0,
-                    source_type="database_constraint",
-                    status="confirmed",
-                    reason=["数据库显式外键约束"],
-                    constraint_name=fk.get("name"),
-                )
-            )
-            relationship_count += 1
+    snapshot, relationship_count = persist_schema_snapshot(db, project_id, schema)
 
     project.status = "schema_synced"
     db.commit()
-    db.refresh(snapshot)
 
     return SchemaSyncResult(
         success=True,
@@ -233,6 +118,45 @@ def list_snapshots(project_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@router.get("/projects/{project_id}/schema/diff", response_model=dict)
+def schema_diff(
+    project_id: int,
+    from_version: int | None = None,
+    to_version: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """Compare two schema snapshots and return a structured change report.
+
+    Defaults to the latest two snapshots when versions are omitted.
+    """
+    snapshots = (
+        db.query(SchemaSnapshot)
+        .filter(SchemaSnapshot.project_id == project_id)
+        .order_by(SchemaSnapshot.version.desc())
+        .all()
+    )
+    if len(snapshots) < 2:
+        raise HTTPException(status_code=400, detail="至少需要两个 Schema 快照才能对比")
+
+    by_version = {s.version: s for s in snapshots}
+    versions = sorted(by_version.keys())
+    to_v = to_version if to_version is not None else versions[-1]
+    from_v = from_version if from_version is not None else versions[-2]
+    if from_v not in by_version or to_v not in by_version:
+        raise HTTPException(status_code=404, detail="快照版本不存在")
+    if from_v == to_v:
+        raise HTTPException(status_code=400, detail="请选择两个不同的快照版本")
+    if from_v > to_v:
+        from_v, to_v = to_v, from_v
+
+    old = by_version[from_v].snapshot_data or {}
+    new = by_version[to_v].snapshot_data or {}
+    diff = diff_from_snapshots(old, new)
+    diff["from_version"] = from_v
+    diff["to_version"] = to_v
+    return diff
+
+
 @router.get("/projects/{project_id}/schema/tables", response_model=list[TableOut])
 def list_tables(project_id: int, snapshot_id: int | None = None, db: Session = Depends(get_db)):
     """Return tables (with columns) for the latest or a specified snapshot."""
@@ -256,6 +180,24 @@ def list_tables(project_id: int, snapshot_id: int | None = None, db: Session = D
         .order_by(SchemaTable.table_name)
         .all()
     )
+    # Merge confirmed comment suggestions into the returned columns so the ER
+    # canvas / detail panels show the AI-confirmed comments without requiring a
+    # write-back to the live database.
+    suggestion_map: dict[tuple, str] = {}
+    suggestions = (
+        db.query(CommentSuggestion)
+        .filter(
+            CommentSuggestion.project_id == project_id,
+            CommentSuggestion.status.in_(("accepted", "applied")),
+        )
+        .all()
+    )
+    for s in suggestions:
+        if s.target_type == "table":
+            suggestion_map[("table", s.table_name)] = s.suggested_comment
+        else:
+            suggestion_map[("column", s.table_name, s.column_name or "")] = s.suggested_comment
+
     out: list[TableOut] = []
     for t in tables:
         cols = sorted(t.columns, key=lambda c: (not c.is_primary_key, c.id))
@@ -263,7 +205,7 @@ def list_tables(project_id: int, snapshot_id: int | None = None, db: Session = D
             TableOut(
                 id=t.id,
                 table_name=t.table_name,
-                comment=t.comment,
+                comment=suggestion_map.get(("table", t.table_name)) or t.comment,
                 engine=t.engine,
                 columns=[
                     ColumnOut(
@@ -275,7 +217,7 @@ def list_tables(project_id: int, snapshot_id: int | None = None, db: Session = D
                         default_value=c.default_value,
                         is_primary_key=c.is_primary_key,
                         is_unique=c.is_unique,
-                        comment=c.comment,
+                        comment=suggestion_map.get(("column", t.table_name, c.column_name)) or c.comment,
                     )
                     for c in cols
                 ],

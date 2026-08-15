@@ -17,6 +17,12 @@ dependencies = [
   "langgraph>=0.2.0",
   "langchain-core>=0.3.0",
   "typing-extensions>=4.8.0",
+  "sqlglot>=25.0.0",
+  "networkx>=3.0.0",
+  "mcp>=1.15.0",
+  "python-docx>=1.1.0",
+  "openpyxl>=3.1.0",
+  "reportlab>=4.0.0",
 ]
 
 [tool.uv]

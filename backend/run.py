@@ -54,13 +54,38 @@ def _run_server(port: int) -> None:
     uvicorn.run("app.main:app", host="127.0.0.1", port=port, reload=False)
 
 
+def _run_mcp_http(port: int = 8001) -> None:
+    """Run the MCP server over Streamable HTTP on a dedicated localhost port."""
+    import asyncio
+
+    from app.services.mcp_server import server
+
+    asyncio.run(
+        server.run_streamable_http_async(
+            host="127.0.0.1",
+            port=port,
+            streamable_http_path="/mcp",
+        )
+    )
+
+
 if __name__ == "__main__":
+    # MCP stdio mode: `python run.py --mcp` starts a local MCP server for
+    # Cursor / Claude Code / Codex etc.
+    if "--mcp" in sys.argv:
+        from app.services.mcp_server import run_stdio
+
+        run_stdio()
+        sys.exit(0)
+
     port = _find_free_port(8000)
+    mcp_port = _find_free_port(8001)
 
     if getattr(sys, "frozen", False):
         # Packaged build: serve the frontend ourselves and show a native
         # desktop window (pywebview -> Edge WebView2) instead of a browser tab.
         threading.Thread(target=_run_server, args=(port,), daemon=True).start()
+        threading.Thread(target=_run_mcp_http, args=(mcp_port,), daemon=True).start()
         import webview
 
         if _wait_for_server(port):
@@ -74,6 +99,7 @@ if __name__ == "__main__":
     else:
         # Development: just run the API server; the Vue dev server (Vite on
         # :5173) proxies /api here. Optionally open the API root in a browser.
+        threading.Thread(target=_run_mcp_http, args=(mcp_port,), daemon=True).start()
         threading.Thread(
             target=_wait_for_server_and_open, args=(port,), daemon=True
         ).start()

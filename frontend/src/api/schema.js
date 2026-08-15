@@ -8,6 +8,10 @@ export function getSnapshots(projectId) {
   return request.get(`/projects/${projectId}/schema/snapshots`)
 }
 
+export function getSchemaDiff(projectId, params) {
+  return request.get(`/projects/${projectId}/schema/diff`, { params })
+}
+
 export function getTables(projectId, params) {
   return request.get(`/projects/${projectId}/schema/tables`, { params })
 }

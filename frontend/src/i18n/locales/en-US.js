@@ -33,6 +33,15 @@ export default {
     projects: 'Projects',
     connection: 'Database Connection',
     erModel: 'ER Model Editor',
+    conceptModel: 'Concept Model',
+    schemaHistory: 'Schema Change Diff',
+    review: 'Architecture Review',
+    comments: 'Comment Completion',
+    sensitive: 'Sensitive Data',
+    dataGen: 'Test Data',
+    domains: 'Business Domains',
+    lineage: 'SQL Lineage',
+    designDoc: 'Design Doc',
     aiSuggestions: 'AI Suggestions',
     export: 'Document Export'
   },
@@ -80,6 +89,8 @@ export default {
       searchPlaceholder: 'Search project name...',
       status: 'Status',
       newProject: 'New Project',
+      importDdl: 'Model from DDL/DBML',
+      importDdlTitle: 'Quick model from DDL/DBML',
       emptyDesc: 'No projects yet. Click the button to create a database analysis project.',
       noDescription: 'No description',
       suggestions: 'suggestions',
@@ -105,6 +116,14 @@ export default {
         openER: 'Open ER Model',
         connection: 'Connection Config',
         versions: 'Version List',
+        schemaHistory: 'Schema Change Diff',
+        review: 'Architecture Review',
+        comments: 'Comment Completion',
+        sensitive: 'Sensitive Data',
+        dataGen: 'Test Data',
+        domains: 'Business Domains',
+        lineage: 'SQL Lineage',
+        designDoc: 'Design Doc',
         delete: 'Delete'
       }
     },
@@ -208,6 +227,7 @@ export default {
   erModel: {
     breadcrumb: {
       project: 'Project',
+      lineage: 'SQL Lineage',
       erEditor: 'ER Model Editor'
     },
     tablesCount: '{count} tables',
@@ -217,7 +237,16 @@ export default {
     fitView: 'Fit View',
     addVirtual: 'Add Virtual Entity',
     aiSuggest: 'AI Suggest',
+    importSchema: 'Import DDL/DBML',
+    conceptModel: 'Concept Model',
     export: 'Export',
+    exportImage: 'Export Image',
+    exportFormat: 'Image Format',
+    exportScale: 'Scale',
+    domainHighlight: 'Highlighting domain {domain}',
+    tablesHighlight: 'Highlighted {count} tables',
+    backToLineage: 'Back to SQL Lineage',
+    clearHighlight: 'Clear Highlight',
     save: 'Save',
     saveVersion: 'Save Version',
     tableList: 'Table List',
@@ -352,7 +381,10 @@ export default {
       enterEntityName: 'Please enter entity name',
       virtualAdded: 'Virtual entity added',
       modelSaved: 'ER model saved',
-      versionSaved: 'Version saved'
+      versionSaved: 'Version saved',
+      importReloading: 'Import succeeded, refreshing model...',
+      imageExported: 'Image exported',
+      imageExportFailed: 'Image export failed'
     }
   },
   aiSuggestions: {
@@ -366,6 +398,241 @@ export default {
     all: 'All',
     pending: 'Pending',
     filterByTable: 'Filter by Table'
+  },
+  conceptModel: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'Concept Model'
+    },
+    stats: {
+      entities: '{count} Entities',
+      relations: '{count} Relations',
+      attributes: '{count} Attributes'
+    },
+    reLayout: 'Auto Layout',
+    fitView: 'Fit View',
+    aiName: 'AI Naming',
+    reconvert: 'Re-convert',
+    backToEr: 'Back to ER Model',
+    reconvertConfirm: 'Re-converting regenerates the concept model from the latest schema and relationships (manual positions will be lost). Continue?',
+    aiNameConfirm: 'AI will generate business-meaningful names for each relationship (e.g. Reply, Order, Manage). Falls back to rule-based names when no LLM is configured. Continue?',
+    saved: 'Concept model saved',
+    legend: {
+      entity: 'Entity',
+      relation: 'Relationship',
+      pk: 'Primary Key',
+      fk: 'Foreign Key',
+      uk: 'Unique',
+      attr: 'Attribute'
+    }
+  },
+  importSchema: {
+    title: 'Import DDL / DBML',
+    ddl: 'DDL',
+    dbml: 'DBML',
+    ddlPlaceholder: 'Paste CREATE TABLE statements here...',
+    dbmlPlaceholder: 'Paste DBML content (dbdiagram.io format) here...',
+    chooseFile: 'Choose File',
+    noDbNeeded: 'No database connection needed - paste or upload to model',
+    preview: 'Preview',
+    previewTitle: 'Parse Result',
+    tables: 'tables',
+    fks: 'FKs',
+    tableName: 'Table',
+    comment: 'Comment',
+    columns: 'Columns',
+    import: 'Import',
+    imported: 'Imported successfully',
+    enterContent: 'Please paste or upload content first'
+  },
+  schemaHistory: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'Schema Change Diff'
+    },
+    subtitle: 'Select two snapshot versions to inspect structural changes',
+    timeline: 'Snapshot Timeline',
+    tables: 'tables',
+    selectTip: 'Click to select two versions (first selected = from)',
+    selectTwo: 'Select two snapshot versions on the left to compare',
+    maxTwo: 'You can select at most two versions',
+    onlyOneHint: 'Only 1 schema snapshot exists. Each "Sync Database" or "Import DDL/DBML" creates a new snapshot version; the V1/V2/V3 in "Version History" are saved ER model versions, not schema snapshots.',
+    from: 'From',
+    to: 'To',
+    tablesAdded: 'Added',
+    tablesRemoved: 'Removed',
+    tablesChanged: 'Changed',
+    columnsAffected: 'Columns Affected',
+    addedTables: 'Added Tables',
+    removedTables: 'Removed Tables',
+    changedTables: 'Change Details',
+    columnsAdded: 'Columns Added',
+    columnsRemoved: 'Columns Removed',
+    columnsChanged: 'Columns Changed',
+    indexes: 'Index Changes',
+    fks: 'Foreign Key Changes',
+    exportReport: 'Export Report',
+    backToEr: 'Back to ER Model'
+  },
+  review: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'Architecture Review'
+    },
+    subtitle: 'Rule-based health check + AI architecture review with prioritized fixes',
+    runAi: 'Enable AI review',
+    runReview: 'Run Review',
+    exportReport: 'Export Report',
+    backToEr: 'Back to ER Model',
+    empty: 'No review report yet. Click "Run Review" in the top-right corner.',
+    fatal: 'Fatal',
+    warning: 'Warning',
+    suggestion: 'Suggestion',
+    aiFindings: 'AI Findings',
+    generatedAt: 'Generated at',
+    aiTitle: 'AI Architecture Review',
+    lintTitle: 'Rule-based Health Check',
+    filterAll: 'All',
+    noFindings: 'No findings under the current filter'
+  },
+  comments: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'Comment Completion'
+    },
+    subtitle: 'AI generates table/column comments in batch - review, write back to DB, or export a data dictionary',
+    generate: 'Generate with AI',
+    generateConfirm: 'AI will generate suggested comments for tables/columns missing comments (replaces the previous suggestions). Continue?',
+    generated: 'Generated {tables} table comments and {columns} column comments',
+    exportDictionary: 'Export Dictionary',
+    generateSql: 'Generate Write-back SQL',
+    executeWriteback: 'Execute Write-back',
+    executeConfirm: 'Accepted comments will be written directly into the database (ALTER / COMMENT statements). Make sure the DB account has write permission. Continue?',
+    executed: 'Executed {count} write-back statements',
+    backToEr: 'Back to ER Model',
+    pending: 'Pending',
+    accepted: 'Accepted',
+    rejected: 'Rejected',
+    applied: 'Applied',
+    filterAll: 'All',
+    acceptAll: 'Accept All',
+    rejectAll: 'Reject All',
+    tableType: 'Table',
+    columnType: 'Column',
+    empty: 'No comment suggestions yet. Click "Generate with AI"',
+    sqlTitle: 'Write-back SQL Preview',
+    noSql: 'No SQL to generate',
+    copySql: 'Copy SQL',
+    copied: 'Copied',
+    status: {
+      suggested: 'Pending',
+      accepted: 'Accepted',
+      rejected: 'Rejected',
+      applied: 'Applied'
+    }
+  },
+  sensitive: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'Sensitive Data'
+    },
+    subtitle: 'Automatically flag GDPR / PIPL privacy fields and export a compliance report',
+    sampling: 'Sample validation (read-only)',
+    scan: 'Start Scan',
+    samplingConfirm: 'A read-only sample (up to 100 rows per column) will be validated to raise detection confidence. Continue?',
+    scanned: 'Scan finished, {count} sensitive fields found',
+    exportReport: 'Export Compliance Report',
+    backToEr: 'Back to ER Model',
+    high: 'High Risk',
+    medium: 'Medium Risk',
+    low: 'Low Risk',
+    total: 'Fields',
+    filterAll: 'All',
+    confirm: 'Confirm',
+    falsePositive: 'False Positive',
+    mitigated: 'Mitigated',
+    empty: 'No scan results yet. Click "Start Scan"',
+    risk: {
+      high: 'High',
+      medium: 'Medium',
+      low: 'Low'
+    },
+    status: {
+      detected: 'Pending',
+      confirmed: 'Confirmed',
+      false_positive: 'False Positive',
+      mitigated: 'Mitigated'
+    }
+  },
+  dataGen: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'Test Data'
+    },
+    subtitle: 'Generate business-meaningful test data from field types, comments and foreign keys',
+    generateSql: 'Generate SQL',
+    directInsert: 'Insert Directly',
+    insertConfirm: 'Generated test data will be inserted directly into the target database. Recommended for test/dev environments only. Continue?',
+    inserted: 'Inserted {count} INSERT statements',
+    backToEr: 'Back to ER Model',
+    empty: 'Set rows per table then click "Generate SQL"',
+    tables: '{count} tables',
+    rows: '{count} rows total',
+    executed: '{count} executed',
+    error: 'Execution error',
+    downloadSql: 'Download SQL'
+  },
+  domains: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'Business Domains'
+    },
+    subtitle: 'Auto-cluster tables by foreign-key relationships to overview large databases',
+    aiNames: 'AI naming',
+    analyze: 'Re-cluster',
+    aiConfirm: 'AI will generate a name and description for each business domain (falls back to rule-based names when no LLM is configured). Continue?',
+    analyzed: 'Clustering finished, {count} domains found',
+    backToEr: 'Back to ER Model',
+    empty: 'No domains yet. Click "Re-cluster"',
+    tables: 'tables',
+    viewInCanvas: 'Highlight this domain in the ER canvas'
+  },
+  lineage: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'SQL Lineage'
+    },
+    subtitle: 'Paste SQL to parse table dependencies and impact scope',
+    analyze: 'Analyze',
+    backToEr: 'Back to ER Model',
+    placeholder: 'Paste SQL statements (SELECT / INSERT / UPDATE / DELETE / CREATE)...',
+    unresolved: 'Tables not in the current schema: {tables}',
+    queries: 'Statements',
+    edges: 'Dependencies',
+    knownTables: 'Known Tables',
+    queryList: 'Statements & Dependencies',
+    type: 'Type',
+    target: 'Target',
+    sources: 'Sources',
+    impactTitle: 'Impact Analysis',
+    selectTable: 'Select a table to see its impact',
+    downstream: 'Downstream tables (written/derived)',
+    dependentQueries: 'Queries depending on this table',
+    none: 'None',
+    highlightInEr: 'Highlight this table in the ER canvas',
+    enterSql: 'Please paste SQL first'
+  },
+  designDoc: {
+    breadcrumb: {
+      project: 'Project',
+      title: 'Design Doc'
+    },
+    subtitle: 'Generate a course/graduation project database design document (Markdown / Word / PDF)',
+    author: 'Author',
+    studentId: 'Student ID',
+    exported: 'Exported {format} file',
+    backToEr: 'Back to ER Model',
+    empty: 'Click the Markdown button in the top-right to generate and preview'
   },
   export: {
     backToEditor: 'Back to ER Editor',
@@ -609,6 +876,7 @@ export default {
     error: 'Error',
     retry: 'Retry',
     back: 'Back',
+    reject: 'Reject',
     create: 'Create',
     add: 'Add',
     refresh: 'Refresh',

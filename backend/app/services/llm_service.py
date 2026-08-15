@@ -450,6 +450,150 @@ def _parse_json_response(text: str) -> list[dict]:
         ) from exc
 
 
+def complete_json(
+    settings: LLMSettings,
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+) -> Any:
+    """Generic OpenAI-compatible chat completion that returns parsed JSON.
+
+    Unlike analyze_candidates() this is a building block for arbitrary
+    structured LLM features (concept-model naming, comment generation, AI
+    review, ...). Parses either a JSON array or object out of the response.
+    Raises LLMError when the request fails or the response is not JSON.
+    """
+    if settings.config_id is not None:
+        if not check_rate_limit(settings.config_id, settings.rate_limit, settings.rate_unlimited):
+            raise LLMError(f"请求频率超限（{settings.rate_limit}次/秒），请稍后重试")
+
+    url = _chat_url(settings.base_url, settings.endpoint_path)
+    headers = {"Content-Type": "application/json"}
+    if settings.api_key:
+        headers["Authorization"] = f"Bearer {settings.api_key}"
+    payload: dict[str, Any] = {
+        "model": settings.model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature if temperature is not None else settings.temperature,
+        "max_tokens": max_tokens or settings.max_tokens,
+        "stream": False,
+    }
+    if "dashscope" in (settings.base_url or "").lower():
+        payload["enable_thinking"] = False
+
+    last_error: str | None = None
+    for attempt in range(settings.max_retries + 1):
+        try:
+            with httpx.Client(timeout=max(settings.timeout_seconds, 90)) as client:
+                resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                cleaned = (content or "").strip()
+                if cleaned.startswith("```"):
+                    lines = cleaned.splitlines()
+                    lines = lines[1:]
+                    if lines and lines[-1].strip().startswith("```"):
+                        lines = lines[:-1]
+                    cleaned = "\n".join(lines).strip()
+                start = cleaned.find("{")
+                end = cleaned.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    try:
+                        return json.loads(cleaned[start : end + 1])
+                    except json.JSONDecodeError:
+                        pass
+                start = cleaned.find("[")
+                end = cleaned.rfind("]")
+                if start != -1 and end != -1 and end > start:
+                    try:
+                        return json.loads(cleaned[start : end + 1])
+                    except json.JSONDecodeError:
+                        pass
+                last_error = f"LLM 返回内容不是合法 JSON: {content[:400]}"
+                continue
+            last_error = _http_error_message(resp.status_code, resp.text)
+            if resp.status_code in (401, 404):
+                break
+        except httpx.TimeoutException:
+            last_error = f"请求超时（{settings.timeout_seconds}s）"
+        except httpx.ConnectError as exc:
+            last_error = f"无法连接到 API 端点: {exc}"
+        except Exception as exc:
+            last_error = f"调用 LLM 失败: {exc}"
+
+    raise LLMError(last_error or "调用 LLM 失败")
+
+
+def complete_text(
+    settings: LLMSettings,
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+    max_retries: int | None = None,
+) -> str:
+    """OpenAI-compatible chat completion that returns the raw text answer.
+
+    Unlike complete_json() this does not require the model to emit JSON, so it
+    is suitable for free-form Q&A features such as the MCP ``ask_schema`` tool.
+    Raises LLMError when the request fails or the response is empty.
+    """
+    if settings.config_id is not None:
+        if not check_rate_limit(settings.config_id, settings.rate_limit, settings.rate_unlimited):
+            raise LLMError(f"请求频率超限（{settings.rate_limit}次/秒），请稍后重试")
+
+    url = _chat_url(settings.base_url, settings.endpoint_path)
+    headers = {"Content-Type": "application/json"}
+    if settings.api_key:
+        headers["Authorization"] = f"Bearer {settings.api_key}"
+    payload: dict[str, Any] = {
+        "model": settings.model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature if temperature is not None else settings.temperature,
+        "max_tokens": max_tokens or settings.max_tokens,
+        "stream": False,
+    }
+    # Qwen3 reasoning models on DashScope (阿里云百炼) spend a long time in the
+    # thinking phase and can blow past the request timeout; Q&A only needs the
+    # final answer, so disable thinking for these providers.
+    if "dashscope" in (settings.base_url or "").lower():
+        payload["enable_thinking"] = False
+
+    attempts = (max_retries if max_retries is not None else settings.max_retries) + 1
+    last_error: str | None = None
+    for _ in range(attempts):
+        try:
+            with httpx.Client(timeout=max(settings.timeout_seconds, 90)) as client:
+                resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                content = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
+                if content:
+                    return content
+                last_error = "LLM 返回了空内容"
+                continue
+            last_error = _http_error_message(resp.status_code, resp.text)
+            # Don't retry on auth/model errors.
+            if resp.status_code in (401, 404):
+                break
+        except httpx.TimeoutException:
+            last_error = f"请求超时（{settings.timeout_seconds}s）"
+        except httpx.ConnectError as exc:
+            last_error = f"无法连接到 API 端点: {exc}"
+        except Exception as exc:
+            last_error = f"调用 LLM 失败: {exc}"
+
+    raise LLMError(last_error or "调用 LLM 失败")
+
+
 # ---------------------------------------------------------------------------
 # Main analysis entry point
 # ---------------------------------------------------------------------------

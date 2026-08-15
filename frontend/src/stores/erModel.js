@@ -98,12 +98,13 @@ export const useErModelStore = defineStore('erModel', () => {
       const newColumns = node.data.columns.map(col => {
         const schemaCol = schemaCols.get(col.name)
         if (!schemaCol) return col
-        return {
-          ...col,
-          isPK: schemaCol.is_primary_key || schemaCol.is_pk || schemaCol.isPK || schemaCol.column_key === 'PRI',
-          isFK: fkCols.has(col.name) || schemaCol.is_fk || schemaCol.isFK || schemaCol.column_key === 'MUL',
-          isUnique: schemaCol.is_unique || schemaCol.isUnique || schemaCol.column_key === 'UNI'
-        }
+      return {
+        ...col,
+        isPK: schemaCol.is_primary_key || schemaCol.is_pk || schemaCol.isPK || schemaCol.column_key === 'PRI',
+        isFK: fkCols.has(col.name) || schemaCol.is_fk || schemaCol.isFK || schemaCol.column_key === 'MUL',
+        isUnique: schemaCol.is_unique || schemaCol.isUnique || schemaCol.column_key === 'UNI',
+        comment: schemaCol.comment || schemaCol.column_comment || col.comment || ''
+      }
       })
 
       return {

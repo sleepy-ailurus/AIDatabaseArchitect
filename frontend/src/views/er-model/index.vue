@@ -5,6 +5,13 @@
         <el-breadcrumb separator="/" class="breadcrumb-sm">
           <el-breadcrumb-item style="color: #94A3B8;">{{ t('erModel.breadcrumb.project') }}</el-breadcrumb-item>
           <el-breadcrumb-item style="color: #94A3B8; cursor: pointer;" @click="goToProject">{{ projectName }}</el-breadcrumb-item>
+          <el-breadcrumb-item
+            v-if="route.query.from === 'lineage'"
+            style="color: #94A3B8; cursor: pointer;"
+            @click="goBackToLineage"
+          >
+            {{ t('erModel.breadcrumb.lineage') }}
+          </el-breadcrumb-item>
           <el-breadcrumb-item>
             <span class="current-crumb">{{ t('erModel.breadcrumb.erEditor') }}</span>
           </el-breadcrumb-item>
@@ -57,9 +64,24 @@
             <span class="btn-text">{{ t('erModel.aiSuggest') }}</span>
           </el-button>
         </el-tooltip>
+        <el-tooltip :content="t('erModel.importSchema')" placement="bottom" popper-class="er-tip">
+          <el-button size="small" :icon="Upload" @click="showImportDialog = true">
+            <span class="btn-text">{{ t('erModel.importSchema') }}</span>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip :content="t('erModel.conceptModel')" placement="bottom" popper-class="er-tip">
+          <el-button size="small" :icon="DataAnalysis" type="warning" plain @click="goToConceptModel">
+            <span class="btn-text">{{ t('erModel.conceptModel') }}</span>
+          </el-button>
+        </el-tooltip>
         <el-tooltip :content="t('erModel.export')" placement="bottom" popper-class="er-tip">
           <el-button size="small" :icon="Download" @click="goToExport">
             <span class="btn-text">{{ t('erModel.export') }}</span>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip :content="t('erModel.exportImage')" placement="bottom" popper-class="er-tip">
+          <el-button size="small" :icon="Picture" @click="showExportDialog = true">
+            <span class="btn-text">{{ t('erModel.exportImage') }}</span>
           </el-button>
         </el-tooltip>
         <el-tooltip :content="t('erModel.save')" placement="bottom" popper-class="er-tip">
@@ -80,6 +102,20 @@
     </button>
 
     <div class="editor-body">
+      <div v-if="highlightBanner" class="domain-banner">
+        <el-tag v-if="highlightedDomain != null" type="warning" effect="light" round>
+          {{ t('erModel.domainHighlight', { domain: highlightedDomain + 1 }) }}
+        </el-tag>
+        <el-tag v-if="highlightedTables > 0" type="danger" effect="light" round>
+          {{ t('erModel.tablesHighlight', { count: highlightedTables }) }}
+        </el-tag>
+        <el-button v-if="route.query.from === 'lineage'" size="small" text type="primary" @click="goBackToLineage">
+          {{ t('erModel.backToLineage') }}
+        </el-button>
+        <el-button size="small" text type="info" @click="clearHighlights">
+          {{ t('erModel.clearHighlight') }}
+        </el-button>
+      </div>
       <button class="sidebar-collapse-btn" :class="{ collapsed: leftSidebarCollapsed }" @click="leftSidebarCollapsed = !leftSidebarCollapsed">
         <el-icon><ArrowLeft v-if="!leftSidebarCollapsed" /><ArrowRight v-else /></el-icon>
       </button>
@@ -440,6 +476,33 @@
         <el-button type="primary" @click="confirmTableConnection">{{ t('erModel.dialogs.createRelation') }}</el-button>
       </template>
     </el-dialog>
+
+    <ImportSchemaDialog v-model="showImportDialog" :project-id="projectId" @imported="onImported" />
+
+    <el-dialog v-model="showExportDialog" :title="t('erModel.exportImage')" width="440px" align-center>
+      <el-form label-width="90px">
+        <el-form-item :label="t('erModel.exportFormat')">
+          <el-radio-group v-model="exportFormat">
+            <el-radio-button value="png">PNG</el-radio-button>
+            <el-radio-button value="jpeg">JPEG</el-radio-button>
+            <el-radio-button value="svg">SVG</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="exportFormat !== 'svg'" :label="t('erModel.exportScale')">
+          <el-select v-model="exportScale" style="width: 160px;">
+            <el-option label="1x" :value="1" />
+            <el-option label="2x" :value="2" />
+            <el-option label="3x" :value="3" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showExportDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="exportingImage" @click="doExportImage">
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -460,10 +523,13 @@ import '@vue-flow/minimap/dist/style.css'
 
 import TableNode from '@/components/er/TableNode.vue'
 import RelationEdge from '@/components/er/RelationEdge.vue'
+import ImportSchemaDialog from '@/components/er/ImportSchemaDialog.vue'
+import { renderCanvas, renderSvg, canvasToBlob, downloadBlob } from '@/utils/erRender'
 import { useErModelStore } from '@/stores/erModel'
 import { useProjectStore } from '@/stores/project'
 import { getTables } from '@/api/schema'
 import { getRelationships, createRelationship, deleteRelationship, updateRelationship } from '@/api/relationship'
+import { getDomains } from '@/api/domains'
 import { useDataI18n } from '@/i18n'
 import { registerShortcut, unregisterShortcut } from '@/utils/shortcuts'
 
@@ -493,6 +559,13 @@ const selectedEdgeId = ref(null)
 const detailTab = ref('columns')
 const showEditColumn = ref(false)
 const showVersionDialog = ref(false)
+const showImportDialog = ref(false)
+const showExportDialog = ref(false)
+const exportFormat = ref('png')
+const exportScale = ref(2)
+const exportingImage = ref(false)
+const highlightedDomain = ref(null)
+const highlightedTables = ref(0)
 const showVirtualDialog = ref(false)
 const savingVersion = ref(false)
 const editColForm = ref(null)
@@ -1313,7 +1386,42 @@ const confirmSaveVersion = async () => {
 
 const goToSuggestions = () => router.push(`/projects/${projectId.value}/ai-suggestions`)
 const goToExport = () => router.push(`/projects/${projectId.value}/export`)
+const goToConceptModel = () => router.push(`/projects/${projectId.value}/concept-model`)
 const goToProject = () => router.push('/projects')
+
+const onImported = async () => {
+  ElMessage.success(t('erModel.messages.importReloading'))
+  erModelStore.nodes = []
+  erModelStore.edges = []
+  try {
+    await erModelStore.saveModel(projectId.value)
+  } catch {
+    // ignore - fall back to rebuilding below
+  }
+  await loadModel()
+}
+
+const doExportImage = async () => {
+  exportingImage.value = true
+  try {
+    const pid = projectId.value
+    const ts = Date.now()
+    if (exportFormat.value === 'svg') {
+      const svg = renderSvg(nodes.value, edges.value)
+      downloadBlob(svg, 'image/svg+xml;charset=utf-8', `er-${pid}-${ts}.svg`)
+    } else {
+      const canvas = renderCanvas(nodes.value, edges.value, exportScale.value)
+      const blob = await canvasToBlob(canvas, `image/${exportFormat.value}`, 0.92)
+      downloadBlob(blob, blob.type, `er-${pid}-${ts}.${exportFormat.value}`)
+    }
+    ElMessage.success(t('erModel.messages.imageExported'))
+    showExportDialog.value = false
+  } catch {
+    ElMessage.error(t('erModel.messages.imageExportFailed'))
+  } finally {
+    exportingImage.value = false
+  }
+}
 
 const buildFromSchema = (tables, relationships) => {
   // Build nodes into the store first so buildEdges can resolve table names -> node ids.
@@ -1488,6 +1596,56 @@ const loadModel = async () => {
   erModelStore.nodes = nodes.value
   erModelStore.edges = edges.value
   refreshHandleBounds()
+  applyHighlights()
+}
+
+const applyHighlights = async () => {
+  for (const n of nodes.value) n.class = ''
+
+  const tablesParam = String(route.query.tables || '')
+  const targetTables = tablesParam
+    ? new Set(tablesParam.split(',').map((s) => s.trim()).filter(Boolean))
+    : null
+  highlightedTables.value = 0
+
+  const idx = Number(route.query.domain)
+  highlightedDomain.value = Number.isInteger(idx) && idx >= 0 ? idx : null
+  let domainTables = null
+  if (highlightedDomain.value != null) {
+    try {
+      const domains = await getDomains(projectId.value)
+      const cluster = domains.find((d) => d.cluster_index === highlightedDomain.value)
+      domainTables = cluster ? new Set(cluster.tables) : null
+    } catch {
+      // ignore
+    }
+  }
+
+  for (const n of nodes.value) {
+    const name = n.data?.name
+    if ((targetTables && targetTables.has(name)) || (domainTables && domainTables.has(name))) {
+      n.class = 'domain-highlighted'
+      if (targetTables && targetTables.has(name)) highlightedTables.value += 1
+    }
+  }
+}
+
+const highlightBanner = computed(
+  () =>
+    highlightedDomain.value != null ||
+    highlightedTables.value > 0 ||
+    route.query.from === 'lineage'
+)
+
+const clearHighlights = () => {
+  highlightedDomain.value = null
+  highlightedTables.value = 0
+  for (const n of nodes.value) n.class = ''
+  router.replace(`/projects/${projectId.value}/er-model`)
+}
+
+const goBackToLineage = () => {
+  router.push(`/projects/${projectId.value}/lineage`)
 }
 
 const loadProject = async () => {
@@ -1520,10 +1678,22 @@ watch(projectId, async (newId, oldId) => {
   await Promise.all([loadProject(), loadModel()])
 })
 
+// Re-apply highlights when the query changes while this component stays mounted.
+watch(
+  () => route.query,
+  () => {
+    applyHighlights()
+  }
+)
+
 onMounted(() => {
   setMode(mode.value)
   loadProject()
   loadModel()
+  if (route.query.import === '1') {
+    showImportDialog.value = true
+    router.replace(`/projects/${projectId.value}/er-model`)
+  }
   window.addEventListener('mouseup', onWindowMouseUp)
 
   registerShortcut('Ctrl+s', handleSave)
@@ -1722,6 +1892,28 @@ onBeforeUnmount(() => {
   display: flex;
   overflow: hidden;
   position: relative;
+}
+
+.domain-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  background: $bg-white;
+  border: 1px solid $border-light;
+  border-radius: 20px;
+  padding: 4px 6px 4px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: $shadow-md;
+}
+
+:deep(.domain-highlighted) {
+  outline: 2px solid #f59e0b;
+  outline-offset: 3px;
+  border-radius: 10px;
 }
 
 .tables-sidebar {
@@ -2285,6 +2477,11 @@ onBeforeUnmount(() => {
 
 html.dark {
   .er-editor-page { background: #252526; }
+
+  .domain-banner {
+    background: #252526 !important;
+    border-color: #3c3c3c !important;
+  }
 
   .editor-header {
     background: #252526 !important;

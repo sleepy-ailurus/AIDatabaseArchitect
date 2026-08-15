@@ -31,10 +31,64 @@ const routes = [
         meta: { title: 'menu.erModel', icon: 'Share', hidden: true }
       },
       {
+        path: 'projects/:id/concept-model',
+        name: 'ConceptModel',
+        component: () => import('@/views/concept-model/index.vue'),
+        meta: { title: 'menu.conceptModel', icon: 'DataAnalysis', hidden: true }
+      },
+      {
         path: 'projects/:id/ai-suggestions',
         name: 'AISuggestions',
         component: () => import('@/views/ai-suggestions/index.vue'),
         meta: { title: 'menu.aiSuggestions', icon: 'MagicStick', hidden: true }
+      },
+      {
+        path: 'projects/:id/schema-history',
+        name: 'SchemaHistory',
+        component: () => import('@/views/schema-history/index.vue'),
+        meta: { title: 'menu.schemaHistory', icon: 'Clock', hidden: true }
+      },
+      {
+        path: 'projects/:id/review',
+        name: 'SchemaReview',
+        component: () => import('@/views/review/index.vue'),
+        meta: { title: 'menu.review', icon: 'DocumentChecked', hidden: true }
+      },
+      {
+        path: 'projects/:id/comments',
+        name: 'Comments',
+        component: () => import('@/views/comments/index.vue'),
+        meta: { title: 'menu.comments', icon: 'ChatLineRound', hidden: true }
+      },
+      {
+        path: 'projects/:id/sensitive',
+        name: 'Sensitive',
+        component: () => import('@/views/sensitive/index.vue'),
+        meta: { title: 'menu.sensitive', icon: 'Lock', hidden: true }
+      },
+      {
+        path: 'projects/:id/data-gen',
+        name: 'DataGen',
+        component: () => import('@/views/data-gen/index.vue'),
+        meta: { title: 'menu.dataGen', icon: 'DataLine', hidden: true }
+      },
+      {
+        path: 'projects/:id/domains',
+        name: 'Domains',
+        component: () => import('@/views/domains/index.vue'),
+        meta: { title: 'menu.domains', icon: 'Collection', hidden: true }
+      },
+      {
+        path: 'projects/:id/lineage',
+        name: 'Lineage',
+        component: () => import('@/views/lineage/index.vue'),
+        meta: { title: 'menu.lineage', icon: 'Share', hidden: true }
+      },
+      {
+        path: 'projects/:id/design-doc',
+        name: 'DesignDoc',
+        component: () => import('@/views/design-doc/index.vue'),
+        meta: { title: 'menu.designDoc', icon: 'Document', hidden: true }
       },
       {
         path: 'projects/:id/export',

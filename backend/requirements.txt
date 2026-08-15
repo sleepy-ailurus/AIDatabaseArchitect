@@ -162,3 +162,9 @@ xxhash==3.8.1
     #   langsmith
 zstandard==0.25.0
     # via langsmith
+mcp==2.0.0
+networkx==3.6.1
+openpyxl==3.1.5
+python-docx==1.2.0
+reportlab==5.0.0
+sqlglot==30.17.0

@@ -32,6 +32,15 @@ export default {
     projects: '项目列表',
     connection: '数据库连接',
     erModel: 'ER模型编辑器',
+    conceptModel: '概念模型',
+    schemaHistory: 'Schema 变更对比',
+    review: '架构评审',
+    comments: '注释补全',
+    sensitive: '敏感数据识别',
+    dataGen: '测试数据生成',
+    domains: '业务域概览',
+    lineage: 'SQL 血缘分析',
+    designDoc: '设计说明书',
     aiSuggestions: 'AI关系建议',
     export: '文档导出'
   },
@@ -79,6 +88,8 @@ export default {
       searchPlaceholder: '搜索项目名称...',
       status: '状态',
       newProject: '新建项目',
+      importDdl: '导入 DDL/DBML 建模',
+      importDdlTitle: '从 DDL/DBML 快速建模',
       emptyDesc: '暂无项目，点击右上角新建一个数据库分析项目',
       noDescription: '暂无描述',
       suggestions: '条建议',
@@ -104,6 +115,14 @@ export default {
         openER: '打开 ER 模型',
         connection: '连接配置',
         versions: '版本列表',
+        schemaHistory: 'Schema 变更对比',
+        review: '架构评审',
+        comments: '注释补全',
+        sensitive: '敏感数据识别',
+        dataGen: '测试数据生成',
+        domains: '业务域概览',
+        lineage: 'SQL 血缘分析',
+        designDoc: '设计说明书',
         delete: '删除'
       }
     },
@@ -207,6 +226,7 @@ export default {
   erModel: {
     breadcrumb: {
       project: '项目',
+      lineage: 'SQL 血缘分析',
       erEditor: 'ER 模型编辑器'
     },
     tablesCount: '{count} 张表',
@@ -216,7 +236,16 @@ export default {
     fitView: '适配视图',
     addVirtual: '添加虚拟实体',
     aiSuggest: 'AI 建议',
+    importSchema: '导入 DDL/DBML',
+    conceptModel: '概念模型',
     export: '导出',
+    exportImage: '导出图片',
+    exportFormat: '图片格式',
+    exportScale: '缩放倍数',
+    domainHighlight: '正在高亮业务域 {domain}',
+    tablesHighlight: '已高亮 {count} 张表',
+    backToLineage: '返回 SQL 血缘分析',
+    clearHighlight: '清除高亮',
     save: '保存',
     saveVersion: '存版本',
     tableList: '表列表',
@@ -351,7 +380,10 @@ export default {
       enterEntityName: '请输入实体名',
       virtualAdded: '虚拟实体已添加',
       modelSaved: 'ER 模型已保存',
-      versionSaved: '版本已保存'
+      versionSaved: '版本已保存',
+      importReloading: '导入成功，正在刷新模型...',
+      imageExported: '图片已导出',
+      imageExportFailed: '图片导出失败'
     }
   },
   aiSuggestions: {
@@ -365,6 +397,241 @@ export default {
     all: '全部',
     pending: '待处理',
     filterByTable: '按表筛选'
+  },
+  conceptModel: {
+    breadcrumb: {
+      project: '项目',
+      title: '概念模型'
+    },
+    stats: {
+      entities: '{count} 个实体',
+      relations: '{count} 个联系',
+      attributes: '{count} 个属性'
+    },
+    reLayout: '自动布局',
+    fitView: '适配视图',
+    aiName: 'AI 命名',
+    reconvert: '重新转换',
+    backToEr: '返回 ER 模型',
+    reconvertConfirm: '重新转换将根据最新 Schema 和关系重新生成概念模型（会丢失手动调整的位置），确定继续吗？',
+    aiNameConfirm: '将调用 AI 为每个联系生成业务语义名称（如：回复、下单、管理）。若未配置 LLM 则自动回退为规则命名。确定继续吗？',
+    saved: '概念模型已保存',
+    legend: {
+      entity: '实体',
+      relation: '联系',
+      pk: '主键',
+      fk: '外键',
+      uk: '唯一',
+      attr: '属性'
+    }
+  },
+  importSchema: {
+    title: '导入 DDL / DBML',
+    ddl: 'DDL',
+    dbml: 'DBML',
+    ddlPlaceholder: '在此粘贴 CREATE TABLE 语句...',
+    dbmlPlaceholder: '在此粘贴 DBML 内容（dbdiagram.io 格式）...',
+    chooseFile: '选择文件',
+    noDbNeeded: '无需连接数据库，粘贴或上传即可建模',
+    preview: '预览',
+    previewTitle: '解析结果',
+    tables: '张表',
+    fks: '条外键',
+    tableName: '表名',
+    comment: '注释',
+    columns: '字段',
+    import: '确认导入',
+    imported: '导入成功',
+    enterContent: '请先粘贴或上传内容'
+  },
+  schemaHistory: {
+    breadcrumb: {
+      project: '项目',
+      title: 'Schema 变更对比'
+    },
+    subtitle: '选择两个快照版本，查看结构变更明细',
+    timeline: '快照时间线',
+    tables: '张表',
+    selectTip: '点击选择两个版本（先选中的为起点）',
+    selectTwo: '请在左侧选择两个快照版本进行对比',
+    maxTwo: '最多选择两个版本',
+    onlyOneHint: '当前只有 1 个 Schema 快照。每次「同步数据库」或「导入 DDL/DBML」都会生成一个新快照版本；「版本历史」里的 V1/V2/V3 是 ER 模型保存版本，与 Schema 快照不是同一套。',
+    from: '从',
+    to: '到',
+    tablesAdded: '新增表',
+    tablesRemoved: '删除表',
+    tablesChanged: '变更表',
+    columnsAffected: '受影响字段',
+    addedTables: '新增的表',
+    removedTables: '删除的表',
+    changedTables: '变更明细',
+    columnsAdded: '新增字段',
+    columnsRemoved: '删除字段',
+    columnsChanged: '修改字段',
+    indexes: '索引变更',
+    fks: '外键变更',
+    exportReport: '导出变更报告',
+    backToEr: '返回 ER 模型'
+  },
+  review: {
+    breadcrumb: {
+      project: '项目',
+      title: '架构评审'
+    },
+    subtitle: '规则体检 + AI 架构评审，输出分级修复建议',
+    runAi: '启用 AI 评审',
+    runReview: '开始评审',
+    exportReport: '导出报告',
+    backToEr: '返回 ER 模型',
+    empty: '还没有评审报告，点击右上角「开始评审」',
+    fatal: '致命',
+    warning: '警告',
+    suggestion: '建议',
+    aiFindings: 'AI 意见',
+    generatedAt: '生成时间',
+    aiTitle: 'AI 架构评审',
+    lintTitle: '规则体检',
+    filterAll: '全部',
+    noFindings: '当前筛选下没有发现问题'
+  },
+  comments: {
+    breadcrumb: {
+      project: '项目',
+      title: '注释补全'
+    },
+    subtitle: 'AI 批量生成表/字段注释，审阅后可写回数据库或导出数据字典',
+    generate: 'AI 生成建议',
+    generateConfirm: '将调用 AI 为缺少注释的表和字段生成建议注释（覆盖上一次建议），确定继续吗？',
+    generated: '已生成 {tables} 条表注释、{columns} 条字段注释',
+    exportDictionary: '导出数据字典',
+    generateSql: '生成写回 SQL',
+    executeWriteback: '执行写回',
+    executeConfirm: '将把已接受的注释直接写入数据库（执行 ALTER/COMMENT 语句）。请确认数据库账号有写权限，确定执行吗？',
+    executed: '已执行 {count} 条写回语句',
+    backToEr: '返回 ER 模型',
+    pending: '待处理',
+    accepted: '已接受',
+    rejected: '已拒绝',
+    applied: '已写回',
+    filterAll: '全部',
+    acceptAll: '全部接受',
+    rejectAll: '全部拒绝',
+    tableType: '表',
+    columnType: '字段',
+    empty: '暂无注释建议，点击「AI 生成建议」',
+    sqlTitle: '写回 SQL 预览',
+    noSql: '无可生成的 SQL',
+    copySql: '复制 SQL',
+    copied: '已复制',
+    status: {
+      suggested: '待处理',
+      accepted: '已接受',
+      rejected: '已拒绝',
+      applied: '已写回'
+    }
+  },
+  sensitive: {
+    breadcrumb: {
+      project: '项目',
+      title: '敏感数据识别'
+    },
+    subtitle: '自动标记 GDPR / 个保法（PIPL）隐私字段，输出合规报告',
+    sampling: '抽样验证（只读）',
+    scan: '开始扫描',
+    samplingConfirm: '将对候选字段进行只读抽样验证（每字段最多 100 行），以提升识别置信度。确定继续吗？',
+    scanned: '扫描完成，发现 {count} 个敏感字段',
+    exportReport: '导出合规报告',
+    backToEr: '返回 ER 模型',
+    high: '高风险',
+    medium: '中风险',
+    low: '低风险',
+    total: '敏感字段',
+    filterAll: '全部',
+    confirm: '确认',
+    falsePositive: '误报',
+    mitigated: '已处置',
+    empty: '暂无扫描结果，点击「开始扫描」',
+    risk: {
+      high: '高',
+      medium: '中',
+      low: '低'
+    },
+    status: {
+      detected: '待处理',
+      confirmed: '已确认',
+      false_positive: '误报',
+      mitigated: '已处置'
+    }
+  },
+  dataGen: {
+    breadcrumb: {
+      project: '项目',
+      title: '测试数据生成'
+    },
+    subtitle: '基于字段类型、注释与外键关系生成符合业务语义的测试数据',
+    generateSql: '生成 SQL',
+    directInsert: '直接写入数据库',
+    insertConfirm: '将把生成的测试数据直接插入目标数据库。建议仅在测试/开发环境执行，确定继续吗？',
+    inserted: '已写入 {count} 条 INSERT 语句',
+    backToEr: '返回 ER 模型',
+    empty: '配置每表行数后点击「生成 SQL」',
+    tables: '{count} 张表',
+    rows: '共 {count} 行',
+    executed: '已写入 {count} 条',
+    error: '执行出错',
+    downloadSql: '下载 SQL'
+  },
+  domains: {
+    breadcrumb: {
+      project: '项目',
+      title: '业务域概览'
+    },
+    subtitle: '基于外键关系自动聚类，概览大型数据库的业务模块',
+    aiNames: 'AI 命名业务域',
+    analyze: '重新聚类',
+    aiConfirm: '将调用 AI 为每个业务域生成名称和描述（未配置 LLM 时回退为规则命名）。确定继续吗？',
+    analyzed: '聚类完成，共 {count} 个业务域',
+    backToEr: '返回 ER 模型',
+    empty: '暂无业务域，点击「重新聚类」',
+    tables: '张表',
+    viewInCanvas: '在 ER 画布中高亮此域'
+  },
+  lineage: {
+    breadcrumb: {
+      project: '项目',
+      title: 'SQL 血缘分析'
+    },
+    subtitle: '粘贴 SQL 语句，自动解析表依赖与影响范围',
+    analyze: '开始分析',
+    backToEr: '返回 ER 模型',
+    placeholder: '粘贴 SQL 语句（支持 SELECT / INSERT / UPDATE / DELETE / CREATE）...',
+    unresolved: '以下表不在当前 Schema 中：{tables}',
+    queries: '语句数',
+    edges: '依赖边',
+    knownTables: '已知表',
+    queryList: '语句与表依赖',
+    type: '类型',
+    target: '目标表',
+    sources: '源表',
+    impactTitle: '影响分析',
+    selectTable: '选择表查看影响范围',
+    downstream: '下游表（被写入/派生）',
+    dependentQueries: '依赖此表的查询',
+    none: '无',
+    highlightInEr: '在 ER 画布中高亮此表',
+    enterSql: '请先粘贴 SQL'
+  },
+  designDoc: {
+    breadcrumb: {
+      project: '项目',
+      title: '设计说明书'
+    },
+    subtitle: '一键生成课程设计/毕设版数据库设计说明书（Markdown / Word / PDF）',
+    author: '作者',
+    studentId: '学号',
+    exported: '已导出 {format} 文件',
+    backToEr: '返回 ER 模型',
+    empty: '点击右上角 Markdown 按钮生成并预览说明书'
   },
   export: {
     backToEditor: '返回 ER 编辑器',
@@ -608,6 +875,7 @@ export default {
     error: '操作失败',
     retry: '重试',
     back: '返回',
+    reject: '拒绝',
     create: '创建',
     add: '添加',
     refresh: '刷新',

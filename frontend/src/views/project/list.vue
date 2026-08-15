@@ -12,6 +12,9 @@
         <el-button type="primary" :icon="Plus" @click="openCreate">
           {{ t('project.list.newProject') }}
         </el-button>
+        <el-button :icon="Upload" @click="openImportCreate">
+          {{ t('project.list.importDdl') }}
+        </el-button>
       </div>
     </div>
 
@@ -37,6 +40,14 @@
                   <el-dropdown-item @click.stop="openProject(p)"><el-icon><Share /></el-icon> {{ t('project.list.actions.openER') }}</el-dropdown-item>
                   <el-dropdown-item @click.stop="goConnection(p)"><el-icon><Connection /></el-icon> {{ t('project.list.actions.connection') }}</el-dropdown-item>
                   <el-dropdown-item @click.stop="openVersions(p)"><el-icon><Clock /></el-icon> {{ t('project.list.actions.versions') }}</el-dropdown-item>
+                  <el-dropdown-item @click.stop="goSchemaHistory(p)"><el-icon><DataAnalysis /></el-icon> {{ t('project.list.actions.schemaHistory') }}</el-dropdown-item>
+                  <el-dropdown-item @click.stop="goReview(p)"><el-icon><DocumentChecked /></el-icon> {{ t('project.list.actions.review') }}</el-dropdown-item>
+                  <el-dropdown-item @click.stop="goComments(p)"><el-icon><ChatLineRound /></el-icon> {{ t('project.list.actions.comments') }}</el-dropdown-item>
+                  <el-dropdown-item @click.stop="goSensitive(p)"><el-icon><Lock /></el-icon> {{ t('project.list.actions.sensitive') }}</el-dropdown-item>
+                  <el-dropdown-item @click.stop="goDataGen(p)"><el-icon><DataLine /></el-icon> {{ t('project.list.actions.dataGen') }}</el-dropdown-item>
+                  <el-dropdown-item @click.stop="goDomains(p)"><el-icon><Collection /></el-icon> {{ t('project.list.actions.domains') }}</el-dropdown-item>
+                  <el-dropdown-item @click.stop="goLineage(p)"><el-icon><Share /></el-icon> {{ t('project.list.actions.lineage') }}</el-dropdown-item>
+                  <el-dropdown-item @click.stop="goDesignDoc(p)"><el-icon><Document /></el-icon> {{ t('project.list.actions.designDoc') }}</el-dropdown-item>
                   <el-dropdown-item divided style="color: #EF4444;" @click.stop="handleDelete(p)">
                     <el-icon><Delete /></el-icon> {{ t('project.list.actions.delete') }}
                   </el-dropdown-item>
@@ -118,6 +129,29 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="showImportCreate" :title="t('project.list.importDdlTitle')" width="480px" :close-on-click-modal="false">
+      <el-form :model="importForm" :label-width="createLabelWidth">
+        <el-form-item :label="t('project.form.name')" required>
+          <el-input v-model="importForm.name" :placeholder="t('project.form.namePlaceholder')" />
+        </el-form-item>
+        <el-form-item :label="t('project.form.description')">
+          <el-input v-model="importForm.description" type="textarea" :rows="2" :placeholder="t('project.form.descriptionPlaceholder')" />
+        </el-form-item>
+        <el-form-item :label="t('project.form.dbType')">
+          <el-select v-model="importForm.db_type" style="width: 100%;" :placeholder="t('project.form.selectDbType')">
+            <el-option label="MySQL 8.x" value="mysql" />
+            <el-option label="PostgreSQL 14+" value="postgresql" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showImportCreate = false">{{ t('project.form.cancel') }}</el-button>
+        <el-button type="primary" :loading="creatingImport" @click="handleImportCreate">
+          {{ t('project.list.importDdl') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="showVersions" :title="`${t('project.list.versionHistory')} - ${versionProject?.name || ''}`" width="640px" :close-on-click-modal="false">
       <div v-loading="versionLoading" class="version-list">
         <div v-if="!versions.length" class="version-empty">
@@ -153,10 +187,17 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import utc from 'dayjs/plugin/utc'
+import 'dayjs/locale/zh-cn'
+import 'dayjs/locale/en'
 import { useProjectStore } from '@/stores/project'
 import { createProject as createProjectApi, deleteProject as deleteProjectApi } from '@/api/project'
 import { getVersions, getVersion, saveERModel, deleteVersion } from '@/api/erModel'
 import { useDataI18n } from '@/i18n'
+
+dayjs.extend(relativeTime)
+dayjs.extend(utc)
 
 const { t, locale } = useI18n()
 const { tData } = useDataI18n()
@@ -168,8 +209,11 @@ const router = useRouter()
 const projectStore = useProjectStore()
 const searchKey = ref('')
 const showCreate = ref(false)
+const showImportCreate = ref(false)
+const creatingImport = ref(false)
 const loading = ref(false)
 const creating = ref(false)
+const importForm = reactive({ name: '', description: '', db_type: 'mysql' })
 const createFormRef = ref()
 
 const showVersions = ref(false)
@@ -208,7 +252,7 @@ const formatTime = (time) => {
   if (!time) return '-'
   try {
     dayjs.locale(locale.value === 'zh-CN' ? 'zh-cn' : 'en')
-    return dayjs(time).fromNow()
+    return dayjs.utc(time).local().fromNow()
   } catch {
     return String(time)
   }
@@ -242,11 +286,71 @@ const goConnection = (p) => {
   router.push(`/projects/${p.id}/connection`)
 }
 
+const goSchemaHistory = (p) => {
+  router.push(`/projects/${p.id}/schema-history`)
+}
+
+const goReview = (p) => {
+  router.push(`/projects/${p.id}/review`)
+}
+
+const goComments = (p) => {
+  router.push(`/projects/${p.id}/comments`)
+}
+
+const goSensitive = (p) => {
+  router.push(`/projects/${p.id}/sensitive`)
+}
+
+const goDataGen = (p) => {
+  router.push(`/projects/${p.id}/data-gen`)
+}
+
+const goDomains = (p) => {
+  router.push(`/projects/${p.id}/domains`)
+}
+
+const goLineage = (p) => {
+  router.push(`/projects/${p.id}/lineage`)
+}
+
+const goDesignDoc = (p) => {
+  router.push(`/projects/${p.id}/design-doc`)
+}
+
 const openCreate = () => {
   createForm.name = ''
   createForm.description = ''
   createForm.db_type = 'mysql'
   showCreate.value = true
+}
+
+const openImportCreate = () => {
+  importForm.name = ''
+  importForm.description = ''
+  importForm.db_type = 'mysql'
+  showImportCreate.value = true
+}
+
+const handleImportCreate = async () => {
+  if (!importForm.name.trim()) {
+    ElMessage.warning(t('project.form.nameRequired'))
+    return
+  }
+  creatingImport.value = true
+  try {
+    const p = await createProjectApi({
+      name: importForm.name.trim(),
+      description: importForm.description.trim() || null,
+      db_type: importForm.db_type
+    })
+    showImportCreate.value = false
+    router.push(`/projects/${p.id}/er-model?import=1`)
+  } catch {
+    // interceptor shows error
+  } finally {
+    creatingImport.value = false
+  }
 }
 
 const handleCreate = async () => {
