@@ -259,5 +259,11 @@ html.dark {
   .current-crumb { color: #f8fafc !important; }
   .sum-card, .ai-card, .lint-card { background: #252526 !important; border-color: #3c3c3c !important; }
   .ai-message, .lint-message { color: #e2e8f0 !important; }
+  .review-page { background: #1e1e1e !important; }
+  .sum-label { color: #94a3b8 !important; }
+  .report-time { color: #94a3b8 !important; }
+  .section-title { color: #e2e8f0 !important; }
+  .section-title.ai { color: #a78bfa !important; }
+  .ai-category, .lint-category { color: #cbd5e1 !important; }
 }
 </style>

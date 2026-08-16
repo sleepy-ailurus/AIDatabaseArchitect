@@ -303,12 +303,13 @@ onMounted(async () => {
 }
 
 .page-header {
-  min-height: 64px;
+  min-height: 48px;
   background: $bg-white;
   border-bottom: 1px solid $border-light;
-  padding: 12px 20px;
+  padding: 10px 20px 4px;
+  margin-bottom: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
@@ -335,7 +336,7 @@ onMounted(async () => {
 }
 
 .panel-title {
-  padding: 14px 16px 8px;
+  padding: 8px 16px 8px;
   font-size: 13px;
   font-weight: 600;
   color: $text-primary;
@@ -463,5 +464,12 @@ html.dark {
   .sum-card { background: #252526 !important; border-color: #3c3c3c !important; }
   .meta-chip { background: #252526 !important; border-color: #3c3c3c !important; color: #94a3b8 !important; }
   .table-name { color: #f8fafc !important; }
+  .history-page { background: #1e1e1e !important; }
+  .panel-title { color: #e2e8f0 !important; }
+  .snapshot-time { color: #94a3b8 !important; }
+  .select-tip { color: #94a3b8 !important; border-top-color: #3c3c3c !important; }
+  .sum-label { color: #94a3b8 !important; }
+  .change-row { color: #cbd5e1 !important; }
+  .muted { color: #94a3b8 !important; }
 }
 </style>

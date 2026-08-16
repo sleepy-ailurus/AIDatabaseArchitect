@@ -230,5 +230,9 @@ html.dark {
   .sum-card, .field-row { background: #252526 !important; border-color: #3c3c3c !important; }
   .field-target { color: #e2e8f0 !important; }
   .confidence { color: #e2e8f0 !important; }
+  .sensitive-page { background: #1e1e1e !important; }
+  .sum-label { color: #94a3b8 !important; }
+  .reason { color: #94a3b8 !important; }
+  .sample { color: #94a3b8 !important; }
 }
 </style>

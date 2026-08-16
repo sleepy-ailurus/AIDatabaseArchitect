@@ -234,6 +234,7 @@ class TestDataGenerate(BaseModel):
 class DomainAnalyze(BaseModel):
     use_ai_names: bool = False
     llm_config_id: int | None = None
+    lang: str = "zh"
 
 
 class DomainOut(BaseModel):
@@ -254,6 +255,7 @@ class LineageImpact(BaseModel):
 class DesignDocRequest(BaseModel):
     author: str = ""
     student_id: str = ""
+    lang: str = "zh"
 
 
 # ---------------------------------------------------------------------------

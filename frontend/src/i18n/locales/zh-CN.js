@@ -594,7 +594,8 @@ export default {
     backToEr: '返回 ER 模型',
     empty: '暂无业务域，点击「重新聚类」',
     tables: '张表',
-    viewInCanvas: '在 ER 画布中高亮此域'
+    viewInCanvas: '在 ER 画布中高亮此域',
+    domainN: '业务域 {n}'
   },
   lineage: {
     breadcrumb: {

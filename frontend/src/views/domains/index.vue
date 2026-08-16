@@ -34,7 +34,7 @@
           <div class="cluster-head">
             <div class="cluster-index">{{ c.cluster_index + 1 }}</div>
             <div class="cluster-info">
-              <div class="cluster-name">{{ c.name }}</div>
+            <div class="cluster-name">{{ displayName(c) }}</div>
               <div class="cluster-desc" v-if="c.description">{{ c.description }}</div>
             </div>
             <el-tag size="small" type="warning" effect="light" round>{{ c.tables.length }} {{ t('domains.tables') }}</el-tag>
@@ -61,7 +61,7 @@ import { getProject } from '@/api/project'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const projectId = computed(() => route.params.id)
 
 const projectName = ref('')
@@ -69,6 +69,12 @@ const clusters = ref([])
 const loading = ref(false)
 const analyzing = ref(false)
 const useAiNames = ref(false)
+
+const displayName = (c) => {
+  const m = /^业务域\s*(\d+)$/.exec(c.name || '')
+  if (m) return t('domains.domainN', { n: m[1] })
+  return c.name || ''
+}
 
 const load = async () => {
   loading.value = true
@@ -95,7 +101,10 @@ const handleAnalyze = async () => {
   }
   analyzing.value = true
   try {
-    clusters.value = await analyzeDomains(projectId.value, { use_ai_names: useAiNames.value })
+    clusters.value = await analyzeDomains(projectId.value, {
+      use_ai_names: useAiNames.value,
+      lang: locale.value
+    })
     ElMessage.success(t('domains.analyzed', { count: clusters.value.length }))
   } catch {
     // interceptor shows error
@@ -156,5 +165,8 @@ html.dark {
   .current-crumb { color: #f8fafc !important; }
   .cluster-card { background: #252526 !important; border-color: #3c3c3c !important; }
   .cluster-name { color: #f8fafc !important; }
+  .domains-page { background: #1e1e1e !important; }
+  .cluster-desc { color: #94a3b8 !important; }
+  .cluster-index { color: #fbbf24 !important; background: rgba(245, 158, 11, 0.15) !important; }
 }
 </style>

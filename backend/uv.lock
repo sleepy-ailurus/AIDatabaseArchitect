@@ -10,7 +10,7 @@ resolution-markers = [
 
 [[package]]
 name = "ai-database-architect-backend"
-version = "0.1.0"
+version = "1.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "cryptography" },

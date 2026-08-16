@@ -65,6 +65,7 @@ def ai_name_clusters(
     schema: ParsedSchema,
     clusters: list[dict],
     settings: LLMSettings,
+    lang: str = "zh",
 ) -> dict[int, dict[str, str]]:
     """Ask the LLM to name each cluster and write a one-line description."""
     try:
@@ -81,11 +82,22 @@ def ai_name_clusters(
         payload = complete_json(
             settings,
             system_prompt=(
-                "你是数据库架构专家。根据每组表及其注释，判断它们共同构成的业务域，"
-                "为每个业务域生成简洁名称（2~6 字，如：用户域、订单域、商品域）和一句话描述。"
-                "只输出 JSON：{\"domains\":[{\"index\":0,\"name\":\"...\",\"description\":\"...\"}]}"
+                "You are a database architecture expert. Based on each group of tables and their "
+                "comments, determine the business domain they form, and generate a concise name "
+                "(2-6 words, e.g. User Domain, Order Domain, Product Domain) and a one-line "
+                'description for each domain. Output only JSON: {"domains":[{"index":0,"name":"...","description":"..."}]}'
+                if lang.startswith("en")
+                else (
+                    "你是数据库架构专家。根据每组表及其注释，判断它们共同构成的业务域，"
+                    "为每个业务域生成简洁名称（2~6 字，如：用户域、订单域、商品域）和一句话描述。"
+                    "只输出 JSON：{\"domains\":[{\"index\":0,\"name\":\"...\",\"description\":\"...\"}]}"
+                )
             ),
-            user_prompt=f"业务域分组：{json.dumps(rows, ensure_ascii=False)}",
+            user_prompt=(
+                f"Domain groups: {json.dumps(rows, ensure_ascii=False)}"
+                if lang.startswith("en")
+                else f"业务域分组：{json.dumps(rows, ensure_ascii=False)}"
+            ),
         )
         items = payload.get("domains") if isinstance(payload, dict) else None
         if not isinstance(items, list):
@@ -107,10 +119,11 @@ def analyze_domains(
     relationships: list[dict] | None = None,
     use_ai_names: bool = False,
     llm_settings: LLMSettings | None = None,
+    lang: str = "zh",
 ) -> list[dict]:
     clusters = cluster_schema(schema, relationships)
     if use_ai_names and llm_settings is not None and clusters:
-        names = ai_name_clusters(schema, clusters, llm_settings)
+        names = ai_name_clusters(schema, clusters, llm_settings, lang=lang)
         for c in clusters:
             info = names.get(c["cluster_index"])
             if info and info.get("name"):

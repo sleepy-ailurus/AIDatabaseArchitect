@@ -41,7 +41,7 @@ import { getProject } from '@/api/project'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const projectId = computed(() => route.params.id)
 
 const projectName = ref('')
@@ -54,7 +54,8 @@ const doExport = async (format) => {
   try {
     const blob = await exportDesignDoc(projectId.value, format, {
       author: '',
-      student_id: ''
+      student_id: '',
+      lang: locale.value
     })
     if (format === 'markdown') {
       previewing.value = true
@@ -115,5 +116,6 @@ html.dark {
   .current-crumb { color: #f8fafc !important; }
   .doc-preview { background: #252526 !important; border-color: #3c3c3c !important; }
   .raw-md { color: #cbd5e1 !important; }
+  .doc-page { background: #1e1e1e !important; }
 }
 </style>

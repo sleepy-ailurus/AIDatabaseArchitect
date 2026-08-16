@@ -81,7 +81,7 @@ Requires **Windows 10 or 11** (x64).
 
 1. Go to the [Releases](https://github.com/sleepy-ailurus/AIDatabaseArchitect/releases) page.
 2. Download the installer for your architecture:
-   - `AIDatabaseArchitect-x64-Setup.exe`
+   - `AIDatabaseArchitect-win-x64-v1.1.0-setup.exe`
 3. Run the setup wizard and follow the on-screen instructions.
 4. Launch **AI Database Architect** from the Start menu or desktop shortcut.
 

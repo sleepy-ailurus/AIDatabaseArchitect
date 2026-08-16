@@ -65,6 +65,7 @@ def export_design_doc(
         concept_model=concept_model,
         author=payload.author,
         student_id=payload.student_id,
+        lang=payload.lang,
     )
     filename = f"design-doc-{project_id}"
     if format == "word":

@@ -595,7 +595,8 @@ export default {
     backToEr: 'Back to ER Model',
     empty: 'No domains yet. Click "Re-cluster"',
     tables: 'tables',
-    viewInCanvas: 'Highlight this domain in the ER canvas'
+    viewInCanvas: 'Highlight this domain in the ER canvas',
+    domainN: 'Domain {n}'
   },
   lineage: {
     breadcrumb: {

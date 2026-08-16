@@ -77,6 +77,7 @@ def analyze(
         _relationships(db, project_id),
         use_ai_names=payload.use_ai_names,
         llm_settings=llm_settings,
+        lang=payload.lang,
     )
 
     db.query(DomainCluster).filter(DomainCluster.project_id == project_id).delete()

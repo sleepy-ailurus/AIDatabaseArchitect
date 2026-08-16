@@ -307,5 +307,8 @@ html.dark {
   .current-crumb { color: #f8fafc !important; }
   .sum-card, .suggestion-row { background: #252526 !important; border-color: #3c3c3c !important; }
   .target { color: #e2e8f0 !important; }
+  .comments-page { background: #1e1e1e !important; }
+  .comment { color: #cbd5e1 !important; }
+  .sum-label { color: #94a3b8 !important; }
 }
 </style>

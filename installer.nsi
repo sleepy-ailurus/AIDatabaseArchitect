@@ -9,7 +9,7 @@
 !define PUBLISHER       "sleepy-ailurus"
 !define SRC_EXE         "${__FILEDIR__}\backend\dist_pwv\AIDatabaseArchitect.exe"
 !define ICO             "${__FILEDIR__}\icon\show.ico"
-!define OUT_FILE        "${__FILEDIR__}\Installer\AIDatabaseArchitect-x64-Setup.exe"
+!define OUT_FILE        "${__FILEDIR__}\Installer\AIDatabaseArchitect-win-x64-v${VERSION}-setup.exe"
 
 Name          "${APP_NAME}"
 OutFile       "${OUT_FILE}"

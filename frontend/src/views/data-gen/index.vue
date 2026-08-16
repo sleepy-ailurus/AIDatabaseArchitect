@@ -136,5 +136,6 @@ onMounted(async () => {
 html.dark {
   .page-header { background: #252526 !important; border-bottom-color: #3c3c3c !important; }
   .current-crumb { color: #f8fafc !important; }
+  .datagen-page { background: #1e1e1e !important; }
 }
 </style>

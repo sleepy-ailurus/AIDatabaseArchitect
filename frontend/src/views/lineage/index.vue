@@ -224,5 +224,9 @@ html.dark {
   .sum-card, .panel { background: #252526 !important; border-color: #3c3c3c !important; }
   .panel-title { color: #e2e8f0 !important; }
   .query-chip { background: #1e1e1e !important; color: #94a3b8 !important; }
+  .lineage-page { background: #1e1e1e !important; }
+  .impact-label { color: #94a3b8 !important; }
+  .sum-label { color: #94a3b8 !important; }
+  .muted { color: #94a3b8 !important; }
 }
 </style>
