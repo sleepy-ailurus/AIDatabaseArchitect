@@ -81,11 +81,13 @@ Requires **Windows 10 or 11** (x64).
 
 1. Go to the [Releases](https://github.com/sleepy-ailurus/AIDatabaseArchitect/releases) page.
 2. Download the installer for your architecture:
-   - `AIDatabaseArchitect-win-x64-v1.1.0-setup.exe`
+   - `AIDatabaseArchitect-x64-Setup.exe`
 3. Run the setup wizard and follow the on-screen instructions.
 4. Launch **AI Database Architect** from the Start menu or desktop shortcut.
 
 > The application is packaged as a standalone Windows installer. No manual Python or Node.js setup is required.
+>
+> Data is stored locally per user under `%APPDATA%\AIDatabaseArchitect\app.db` and is created automatically on first launch.
 
 Want to see what changed? Check the [CHANGELOG](https://github.com/sleepy-ailurus/AIDatabaseArchitect).
 
@@ -149,6 +151,31 @@ AI Database Architect exposes a read-only [MCP](https://modelcontextprotocol.io)
 
   ```bash
   claude mcp add --transport http ai-database-architect http://127.0.0.1:8001/mcp
+  ```
+
+- **可选 Token 校验**：默认关闭。如需保护 MCP HTTP 接口，设置环境变量 `MCP_AUTH_TOKEN`（可写入 `backend/.env`）并重启后端，之后所有 HTTP 工具调用都必须携带 `Authorization: Bearer <token>`。例如在 Codex 的 `~/.codex/config.toml` 中：
+
+  ```toml
+  [mcp_servers.testaidatabase]
+  url = "http://127.0.0.1:8001/mcp"
+  http_headers = { "Authorization" = "Bearer <你的token>" }
+  ```
+
+  HTTP 端点始终启用 DNS rebinding / 跨站 Origin 防护（仅允许 localhost 来源）；stdio 模式不走网络，不受 Token 影响。
+
+  注意：WorkBuddy 等客户端的自定义请求头字段是 `headers`（不是 `auth_token`），例如：
+
+  ```json
+  {
+    "mcpServers": {
+      "my-python-server": {
+        "type": "http",
+        "url": "http://127.0.0.1:8001/mcp",
+        "disabled": false,
+        "headers": { "Authorization": "Bearer <你的token>" }
+      }
+    }
+  }
   ```
 
 Available tools: `list_projects`, `get_project`, `list_tables`, `get_table_schema`, `list_relationships`, `export_er_diagram`, `ask_schema`.

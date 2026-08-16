@@ -684,7 +684,7 @@ export default {
       globalSearch: '全局搜索'
     },
     about: {
-      version: '版本 v1.0.0',
+      version: '版本 v1.1.0',
       desc: '智能数据库 Schema 分析、逻辑外键推断与 ER 模型生成平台。\n通过 Schema 自动解析、规则候选生成、AI 语义判断、可视化 ER 编辑和文档导出，帮助开发人员快速建立可靠的数据库结构认知。',
       feedback: '反馈/建议',
       changelog: '更新日志'

@@ -1,6 +1,6 @@
 [project]
 name = "ai-database-architect-backend"
-version = "0.1.0"
+version = "1.1.0"
 description = "AI Database Architect Backend - Intelligent database schema understanding & ER modeling platform"
 requires-python = ">=3.10"
 dependencies = [

@@ -5,11 +5,11 @@
 ; ---------------------------------------------------------------------------
 !define APP_NAME        "AI Database Architect"
 !define APP_SHORT_NAME  "AIDatabaseArchitect"
-!define VERSION         "1.0.0"
+!define VERSION         "1.1.0"
 !define PUBLISHER       "sleepy-ailurus"
-!define SRC_EXE         "C:\Users\Tby\Desktop\AIDatabaseArchitect\backend\dist_pwv\AIDatabaseArchitect.exe"
-!define ICO             "C:\Users\Tby\Desktop\AIDatabaseArchitect\icon\show.ico"
-!define OUT_FILE        "C:\Users\Tby\Desktop\AIDatabaseArchitect\Installer\AIDatabaseArchitect-x64-Setup.exe"
+!define SRC_EXE         "${__FILEDIR__}\backend\dist_pwv\AIDatabaseArchitect.exe"
+!define ICO             "${__FILEDIR__}\icon\show.ico"
+!define OUT_FILE        "${__FILEDIR__}\Installer\AIDatabaseArchitect-x64-Setup.exe"
 
 Name          "${APP_NAME}"
 OutFile       "${OUT_FILE}"

@@ -2,7 +2,6 @@ import os
 import socket
 import sys
 import threading
-import webbrowser
 
 # When packaged as a Windows GUI app (--noconsole), stdout/stderr are None.
 # Uvicorn's default formatter calls stream.isatty(), so provide a fallback.
@@ -18,6 +17,7 @@ if getattr(sys, "frozen", False):
 
 import uvicorn
 
+from app.config import settings
 from app.main import app
 
 
@@ -43,12 +43,6 @@ def _wait_for_server(port: int, timeout: float = 30.0) -> bool:
     return False
 
 
-def _wait_for_server_and_open(port: int) -> None:
-    """Block until the local server is reachable, then open the browser."""
-    if _wait_for_server(port):
-        webbrowser.open(f"http://localhost:{port}")
-
-
 def _run_server(port: int) -> None:
     """Run the FastAPI/uvicorn server (used in a background thread when packaged)."""
     uvicorn.run("app.main:app", host="127.0.0.1", port=port, reload=False)
@@ -58,15 +52,22 @@ def _run_mcp_http(port: int = 8001) -> None:
     """Run the MCP server over Streamable HTTP on a dedicated localhost port."""
     import asyncio
 
-    from app.services.mcp_server import server
+    import uvicorn
 
-    asyncio.run(
-        server.run_streamable_http_async(
-            host="127.0.0.1",
-            port=port,
+    from app.services.mcp_server import BearerAuthMiddleware, server
+
+    async def serve() -> None:
+        starlette_app = server.streamable_http_app(
             streamable_http_path="/mcp",
+            host="127.0.0.1",
         )
-    )
+        token = (settings.mcp_auth_token or "").strip()
+        if token:
+            starlette_app = BearerAuthMiddleware(starlette_app, token)
+        config = uvicorn.Config(starlette_app, host="127.0.0.1", port=port, log_level="info")
+        await uvicorn.Server(config).serve()
+
+    asyncio.run(serve())
 
 
 if __name__ == "__main__":
@@ -79,7 +80,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     port = _find_free_port(8000)
-    mcp_port = _find_free_port(8001)
+    mcp_port = _find_free_port(port + 1)
 
     if getattr(sys, "frozen", False):
         # Packaged build: serve the frontend ourselves and show a native
@@ -98,9 +99,6 @@ if __name__ == "__main__":
             webview.start()
     else:
         # Development: just run the API server; the Vue dev server (Vite on
-        # :5173) proxies /api here. Optionally open the API root in a browser.
+        # :5173) proxies /api here. Do not open a browser automatically.
         threading.Thread(target=_run_mcp_http, args=(mcp_port,), daemon=True).start()
-        threading.Thread(
-            target=_wait_for_server_and_open, args=(port,), daemon=True
-        ).start()
         uvicorn.run("app.main:app", host="127.0.0.1", port=port, reload=False)

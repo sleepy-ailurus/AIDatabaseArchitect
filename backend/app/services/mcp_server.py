@@ -11,19 +11,64 @@ configured LLM.
 from __future__ import annotations
 
 import json
+import secrets
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
+from app.config import settings
 from app.database import SessionLocal
 from app.models import LLMConfig, Project, Relationship, SchemaSnapshot, SchemaTable
 from app.services.llm_service import complete_text, settings_from_config
 from app.services.schema_parser import schema_from_dict
 
+
+class BearerAuthMiddleware:
+    """Minimal ASGI middleware enforcing a static Bearer token on HTTP requests.
+
+    Unlike the MCP SDK's OAuth-oriented auth, this returns a plain 401 without
+    advertising OAuth resource metadata, so spec-compliant clients don't try to
+    start an OAuth flow that this server does not implement.
+    """
+
+    def __init__(self, app: Any, token: str) -> None:
+        self.app = app
+        self._expected = f"Bearer {token}".encode("utf-8")
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope.get("type") == "http" and str(scope.get("method", "")).upper() != "OPTIONS":
+            headers = {
+                k.decode("latin-1").lower(): v.decode("latin-1")
+                for k, v in scope.get("headers", [])
+            }
+            if not self._is_authorized(headers.get("authorization", "")):
+                body = b'{"error":"invalid_token","error_description":"Authentication required"}'
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 401,
+                        "headers": [
+                            (b"content-type", b"application/json"),
+                            (b"content-length", str(len(body)).encode()),
+                        ],
+                    }
+                )
+                await send({"type": "http.response.body", "body": body})
+                return
+        await self.app(scope, receive, send)
+
+    def _is_authorized(self, auth: str) -> bool:
+        scheme, _, token = auth.partition(" ")
+        token = token.strip()
+        if scheme.lower() != "bearer" or not token:
+            return False
+        return secrets.compare_digest(f"Bearer {token}".encode("utf-8"), self._expected)
+
+
 server = MCPServer(
     name="ai-database-architect",
     title="AI Database Architect",
-    version="1.0.0",
+    version="1.1.0",
     description=(
         "Read-only access to database schemas modeled in AI Database Architect: "
         "tables, columns, relationships, ER diagrams and AI-powered schema Q&A."

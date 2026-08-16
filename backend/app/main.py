@@ -42,7 +42,7 @@ logger = logging.getLogger("ai-database-architect")
 app = FastAPI(
     title="AI Database Architect API",
     description="Intelligent database schema understanding & ER modeling platform",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 app.add_middleware(

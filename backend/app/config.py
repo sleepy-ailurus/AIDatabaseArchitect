@@ -46,6 +46,11 @@ class Settings(BaseSettings):
         "http://localhost:8000",
     ]
 
+    # Optional static Bearer token for the MCP HTTP endpoint.
+    # Empty (default) disables authentication; when set, every MCP HTTP
+    # request must carry `Authorization: Bearer <token>`.
+    mcp_auth_token: str = ""
+
     # High / medium confidence thresholds for AI suggestions.
     confidence_high_threshold: float = 0.85
     confidence_medium_threshold: float = 0.60
