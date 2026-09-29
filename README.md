@@ -190,4 +190,4 @@ If you have questions or run into issues, feel free to open an [issue](https://g
 
 ---
 
-诚邀共创：欢迎到 [讨论区](https://github.com/sleepy-ailurus/AIDatabaseArchitect/discussions) 分享你的想法与建议，也可以联系 QQ：1104219140@qq.com。
+诚邀共创：欢迎到 [讨论区](https://github.com/sleepy-ailurus/AIDatabaseArchitect/discussions) 分享你的想法与建议
